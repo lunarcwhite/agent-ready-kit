@@ -18,14 +18,18 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@auth/drizzle-adapter": "^1.7.0",
+    "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.44.2",
     "next": "^15.5.4",
+    "next-auth": "^5.0.0-beta.29",
     "pg": "^8.13.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.0",
     "@types/react": "^19.1.8",

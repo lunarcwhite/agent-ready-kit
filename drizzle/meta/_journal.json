@@ -15,6 +15,13 @@
       "when": 1787887300000,
       "tag": "0001_project_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790695023339,
+      "tag": "0002_auth",
+      "breakpoints": true
     }
   ]
 }
