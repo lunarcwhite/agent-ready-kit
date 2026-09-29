@@ -45,6 +45,21 @@ Documented in [env.example](env.example) (the `.env.example` equivalent). Server
 
 ## Project structure
 
-Framework conventions apply; domain module boundaries (projects, discovery, decisions,
-knowledge, specifications, validation, readiness, tasks, AI, exports) land in TASK-002
-per `docs/architecture.md` §62.
+```text
+src/
+├── app/                          # Next.js routes (UI + API)
+├── modules/                      # Domain modules (one dir per concern)
+│   ├── projects/ discovery/ decisions/ knowledge/
+│   ├── specifications/           # Spec generation only
+│   ├── validation/ readiness/    # Readiness is deterministic, no AI here
+│   ├── tasks/
+│   └── agent-kit/                # Export packaging, isolated from specifications
+├── ai/                           # All AI code lives here, never in modules/
+│   ├── providers/ prompts/ context/ schemas/ orchestration/
+├── infrastructure/               # database/ auth/ storage/
+└── shared/                       # Cross-cutting utilities only (not a domain dump)
+```
+
+Dependency direction: `modules/` → `ai/` + `infrastructure/` via interfaces;
+domain modules never import provider SDKs, React, or each other's tables directly
+(see `AGENTS.md` §15 and `docs/architecture.md` §62–63).

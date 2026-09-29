@@ -273,7 +273,7 @@ The repository must include:
 
 # TASK-002 — Establish Application Module Boundaries
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M0
 
@@ -325,7 +325,7 @@ Exact directory naming follows the selected framework.
 
 # TASK-003 — Configure Database Infrastructure
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M0
 
@@ -426,7 +426,7 @@ Identifiers must:
 
 # TASK-005 — Configure Background Job Infrastructure
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P1
 **Milestone:** M0
 
