@@ -4,3 +4,4 @@
 export * from "./helpers";
 export * from "./project-counters";
 export * from "./auth";
+export * from "./projects";

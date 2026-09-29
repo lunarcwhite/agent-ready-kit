@@ -515,7 +515,7 @@ Implement authentication for Agent Ready Kit users.
 
 # TASK-011 — Implement Project Persistence
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 
@@ -566,7 +566,7 @@ Optional idea-capture fields should follow the schema.
 
 # TASK-012 — Implement Project List
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M1
 
@@ -601,7 +601,7 @@ Display projects belonging to the authenticated user.
 
 # TASK-013 — Implement Project Creation Flow
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M1
 
@@ -654,7 +654,7 @@ preferred stack
 
 # TASK-014 — Implement Project Authorization Policies
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M1
 
@@ -693,7 +693,7 @@ Document generation must not become the canonical model.
 
 # TASK-020 — Implement Project State Versioning
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M2
 
