@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "db:setup": "node scripts/db-setup.mjs",
-    "test:integration": "vitest run --run src/infrastructure/database/infrastructure.test.ts",
+    "test:integration": "vitest run --run src/infrastructure/database/infrastructure.test.ts src/infrastructure/database/identifiers.test.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

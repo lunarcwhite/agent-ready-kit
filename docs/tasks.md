@@ -370,7 +370,7 @@ Implement:
 
 # TASK-004 — Establish Stable Identifier Service
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M0
 
