@@ -75,9 +75,14 @@ src/
 │   └── agent-kit/                # Export packaging, isolated from specifications
 ├── ai/                           # All AI code lives here, never in modules/
 │   ├── providers/ prompts/ context/ schemas/ orchestration/
-├── infrastructure/               # database/ auth/ storage/
+├── infrastructure/               # database/ auth/ jobs/ storage/
 └── shared/                       # Cross-cutting utilities only (not a domain dump)
 ```
+
+Background jobs (TASK-005): `src/infrastructure/jobs/` provides queue, status,
+bounded retry, and idempotency behind a `JobStore` interface. Execution is
+synchronous for MVP per `docs/architecture.md` §43 — queue infra only when
+proven necessary; durable persistence lands in TASK-131 without changing callers.
 
 Dependency direction: `modules/` → `ai/` + `infrastructure/` via interfaces;
 domain modules never import provider SDKs, React, or each other's tables directly

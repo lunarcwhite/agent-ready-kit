@@ -31,6 +31,7 @@ const INFRA_AREAS = [
   "src/infrastructure/database",
   "src/infrastructure/auth",
   "src/infrastructure/storage",
+  "src/infrastructure/jobs",
   "src/shared",
 ];
 

@@ -426,7 +426,7 @@ Identifiers must:
 
 # TASK-005 — Configure Background Job Infrastructure
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P1
 **Milestone:** M0
 
