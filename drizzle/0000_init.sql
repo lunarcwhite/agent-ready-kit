@@ -1,0 +1,4 @@
+-- Baseline migration (TASK-003): no domain tables yet. Domain tables land
+-- per-task from TASK-011 onwards via `npm run db:generate`. This file exists
+-- so the fresh-database → migrate pipeline is verifiable end to end.
+--> statement-breakpoint

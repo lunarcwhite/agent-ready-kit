@@ -5,6 +5,8 @@
   "description": "Agent Ready Kit — transform software ideas into validated, implementation-ready context for coding agents.",
   "scripts": {
     "dev": "next dev",
+    "db:setup": "node scripts/db-setup.mjs",
+    "test:integration": "vitest run --run src/infrastructure/database/infrastructure.test.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

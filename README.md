@@ -14,30 +14,49 @@ Next.js + TypeScript · React + Tailwind CSS · PostgreSQL + Drizzle ORM · mana
 
 - Node.js >= 20.18 (check `.nvmrc` if present)
 - npm 10+
-- PostgreSQL 15+ (required from TASK-003 onwards; not needed for TASK-001)
+- PostgreSQL 15+ with a `postgres` superuser (dev: `agent_ready_kit`, test: `agent_ready_kit_test`)
 
 ## Local setup
 
 ```bash
 cp env.example .env   # fill in values; .env is git-ignored, never commit secrets
 npm install
+npm run db:setup      # create database + apply migrations (needs DATABASE_URL)
 npm run dev            # http://localhost:3000
 ```
 
 Health check: `GET /api/health` → `{"status":"ok"}`.
 
+## Database
+
+```bash
+npm run db:setup         # fresh DB from migrations (create + migrate)
+npm run db:generate      # generate migration from schema changes
+npm run db:migrate       # apply pending migrations (also used in CI)
+npm run test:integration # live-PostgreSQL suite (needs TEST_DATABASE_URL)
+```
+
+Conventions: UUID PKs + `created_at`/`updated_at` on every domain table
+(`src/infrastructure/database/schema/helpers.ts`); UUIDs via `defaultRandom()`.
+Tests run inside rolled-back transactions (`test-utils.ts`) so they need no
+cleanup. Connection/config failures surface as redacted `DatabaseError`
+(category + pg code only) — connection strings never reach logs or responses.
+
 ## Commands
 
-| Command                              | Purpose                 |
-| ------------------------------------ | ----------------------- |
-| `npm run dev`                        | Local dev server        |
-| `npm run build`                      | Production build        |
-| `npm start`                          | Serve production build  |
-| `npm test`                           | Unit tests (vitest)     |
-| `npm run lint`                       | ESLint                  |
-| `npm run format`                     | Prettier check          |
-| `npm run typecheck`                  | TypeScript `--noEmit`   |
-| `npm run db:generate` / `db:migrate` | Drizzle (from TASK-003) |
+| Command             | Purpose                           |
+| ------------------- | --------------------------------- |
+| `npm run dev`       | Local dev server                  |
+| `npm run build`     | Production build                  |
+| `npm start`         | Serve production build            |
+| `npm test`          | Unit tests (vitest)               |
+| `npm run lint`      | ESLint                            |
+| `npm run format`    | Prettier check                    |
+| `npm run typecheck` | TypeScript `--noEmit`             |
+| `npm run db:setup`  | Create DB + migrate (fresh setup) |
+
+| `npm run db:generate` / `db:migrate` | Drizzle schema workflow |
+| `npm run test:integration` | Live-PostgreSQL suite |
 
 ## Environment variables
 

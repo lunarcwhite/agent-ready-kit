@@ -325,7 +325,7 @@ Exact directory naming follows the selected framework.
 
 # TASK-003 — Configure Database Infrastructure
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M0
 
@@ -370,7 +370,7 @@ Implement:
 
 # TASK-004 — Establish Stable Identifier Service
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M0
 

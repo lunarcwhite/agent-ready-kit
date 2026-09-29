@@ -1,7 +1,7 @@
 import type { Config } from "drizzle-kit";
 
-// Placeholder wired in TASK-003 (database infrastructure).
-// ponytail: add schema paths + migrations once TASK-003 lands; keep CLI working meanwhile.
+// Database CLI config (TASK-003). Schema paths resolve to domain table
+// modules as they land (projects in TASK-011, decisions in TASK-021, ...).
 export default {
   schema: "./src/infrastructure/database/schema/*",
   out: "./drizzle",
