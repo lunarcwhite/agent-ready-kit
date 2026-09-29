@@ -471,7 +471,7 @@ Allow authenticated users to create and manage isolated projects.
 
 # TASK-010 — Implement User Authentication
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 
@@ -515,7 +515,7 @@ Implement authentication for Agent Ready Kit users.
 
 # TASK-011 — Implement Project Persistence
 
-**Status:** BLOCKED
+**Status:** READY
 **Priority:** P0
 **Milestone:** M1
 
