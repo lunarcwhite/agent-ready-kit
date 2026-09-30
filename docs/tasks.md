@@ -1441,7 +1441,7 @@ Convert discovery and decisions into normalized canonical understanding.
 
 # TASK-050 — Implement Idea Analyst
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M5
 
