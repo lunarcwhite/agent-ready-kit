@@ -136,6 +136,22 @@ function toApplied(row: DecisionRow, action: CandidateAction): AppliedCandidate 
   };
 }
 
+// Parses the `applied` query parameter back into decision codes (TASK-057).
+// Pure: empty, blank, and malformed entries drop out, survivors are upper-
+// trimmed codes the summary loader resolves against persisted decisions —
+// so the UI can only ever show what is actually stored, never what was
+// merely attempted.
+export function parseAppliedCodes(raw: string | undefined): string[] {
+  if (raw === undefined || raw.trim() === "") return [];
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const code = part.trim().toUpperCase();
+    if (code === "" || code.length > 32) continue;
+    seen.add(code);
+  }
+  return [...seen];
+}
+
 export async function applyInterpretation(
   db: AppDatabase,
   userId: string,

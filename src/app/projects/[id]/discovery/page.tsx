@@ -33,7 +33,10 @@ import {
 import { selectNextDiscoveryTopic } from "@/modules/discovery/prioritization";
 import { generateDiscoveryQuestion } from "@/modules/discovery/interviewer";
 import { interpretAnswer } from "@/modules/discovery/answer-interpreter";
-import { applyInterpretation } from "@/modules/discovery/candidate-application";
+import { applyInterpretation, parseAppliedCodes } from "@/modules/discovery/candidate-application";
+import { getDecisionByCode } from "@/modules/decisions/decisions";
+import type { DecisionRow } from "@/modules/decisions/decisions";
+import { getProvenanceDisplay, withProvenance } from "@/modules/provenance/provenance";
 import { calculateDiscoveryLevel } from "@/modules/discovery/level";
 import { discoveryLevelLabel, nodeStatusLabel } from "./labels";
 
@@ -64,6 +67,7 @@ async function answerAction(
   let aiOperationId: string | undefined;
   let interpreted = true;
   let applied = true;
+  let appliedCodes: string[] = [];
   try {
     const result = await interpretAnswer(getDb(), user.id, projectId, {
       answer: content,
@@ -73,7 +77,15 @@ async function answerAction(
     interpretation = result.interpretation;
     aiOperationId = result.operationId;
     try {
-      await applyInterpretation(getDb(), user.id, projectId, result.interpretation);
+      const appliedResult = await applyInterpretation(
+        getDb(),
+        user.id,
+        projectId,
+        result.interpretation,
+      );
+      // Codes only — the summary page resolves them against persisted
+      // decisions, so it can never claim an unpersisted change (TASK-057).
+      appliedCodes = appliedResult.applied.map((row) => row.decisionCode);
     } catch {
       applied = false;
     }
@@ -93,7 +105,9 @@ async function answerAction(
     redirect(`/projects/${projectId}/discovery?session=${sessionId}&error=save`);
   }
   const errorSuffix = !interpreted ? "&error=interpret" : !applied ? "&error=apply" : "";
-  redirect(`/projects/${projectId}/discovery?session=${sessionId}${errorSuffix}`);
+  const appliedSuffix =
+    interpreted && applied && appliedCodes.length > 0 ? `&applied=${appliedCodes.join(",")}` : "";
+  redirect(`/projects/${projectId}/discovery?session=${sessionId}${errorSuffix}${appliedSuffix}`);
 }
 
 async function generateQuestionAction(
@@ -162,12 +176,29 @@ function messageRoleLabel(role: string): string {
   return "System";
 }
 
+function formatDecisionValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "string") return value === "" ? "—" : value;
+  try {
+    return JSON.stringify(value) ?? "—";
+  } catch {
+    return "—";
+  }
+}
+
+function statusGlyph(status: string): string {
+  if (status === "CONFIRMED") return "✓";
+  if (status === "RECOMMENDED") return "◇";
+  if (status === "NOT_APPLICABLE") return "—";
+  return "•";
+}
+
 export default async function DiscoveryPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ session?: string; error?: string }>;
+  searchParams?: Promise<{ session?: string; error?: string; applied?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -199,6 +230,17 @@ export default async function DiscoveryPage({
   const messages = activeSession
     ? await listDiscoveryMessages(db, user.id, projectId, activeSession.id)
     : [];
+  // Interpretation summary (TASK-057): codes resolve against persisted
+  // decisions only, so the card reflects what was actually saved — never
+  // what was merely attempted. Unresolvable codes drop out silently.
+  const summaryDecisions: DecisionRow[] = [];
+  for (const code of parseAppliedCodes(query.applied)) {
+    try {
+      summaryDecisions.push(await getDecisionByCode(db, user.id, projectId, code));
+    } catch {
+      continue;
+    }
+  }
   const latestAssistant = [...messages].reverse().find((row) => row.role === "ASSISTANT");
   const suggestedOptions =
     latestAssistant?.metadata &&
@@ -256,6 +298,30 @@ export default async function DiscoveryPage({
           Answer saved and understood, but the decisions couldn&apos;t be applied. Your previous
           decisions are unchanged — try answering again.
         </p>
+      )}
+      {summaryDecisions.length > 0 && (
+        <section
+          aria-label="Understood"
+          className="rounded border border-green-200 bg-green-50 p-4"
+        >
+          <h2 className="text-sm font-medium text-green-800">Understood</h2>
+          <ul className="mt-2 flex flex-col gap-1 text-sm text-green-900">
+            {summaryDecisions.map((decision) => (
+              <li key={decision.decisionCode}>
+                {statusGlyph(decision.status)} {decision.title} —{" "}
+                {formatDecisionValue(decision.value)} ·{" "}
+                {
+                  getProvenanceDisplay(
+                    withProvenance({
+                      sourceType: decision.sourceType,
+                      confidence: decision.confidence,
+                    }).provenance,
+                  ).label
+                }
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">

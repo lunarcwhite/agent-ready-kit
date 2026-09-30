@@ -25,6 +25,7 @@ import {
   classifyDecisionImpact,
   deriveDecisionCategory,
   humanizeDecisionTitle,
+  parseAppliedCodes,
 } from "./candidate-application";
 
 const PERSONAL_APP: AnswerInterpretation = {
@@ -70,6 +71,16 @@ describe("candidate mapping (unit, no database)", () => {
     expect(classifyDecisionImpact("ux.theme")).toBe("MEDIUM");
     // Impact never understates to LOW for machine-applied candidates.
     expect(classifyDecisionImpact("anything.else")).not.toBe("LOW");
+  });
+
+  it("parses applied codes for the summary without trusting raw input", () => {
+    expect(parseAppliedCodes(undefined)).toEqual([]);
+    expect(parseAppliedCodes("  ")).toEqual([]);
+    expect(parseAppliedCodes("dec-auth-001, DEC-AUTH-001, , DEC-USER-002")).toEqual([
+      "DEC-AUTH-001",
+      "DEC-USER-002",
+    ]);
+    expect(parseAppliedCodes("x".repeat(33))).toEqual([]);
   });
 });
 
