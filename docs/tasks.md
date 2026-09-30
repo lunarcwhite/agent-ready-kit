@@ -1739,7 +1739,7 @@ Understood
 
 # TASK-058 — Implement Decision Center UI
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M5
 
