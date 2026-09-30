@@ -9,6 +9,7 @@
 import type { AppDatabase } from "../../infrastructure/database/db";
 import type { EnvLike } from "../../ai/providers/config";
 import type { AIProvider } from "../../ai/providers/types";
+import type { MemoryCache } from "../../ai/orchestration/cache";
 import { globalPrompts, PromptRegistry } from "../../ai/prompts/registry";
 import {
   DISCOVERY_QUESTION_PROMPT,
@@ -42,6 +43,7 @@ export interface GenerateQuestionDeps {
   provider?: AIProvider;
   prompts?: PromptRegistry;
   env?: EnvLike;
+  cache?: MemoryCache | null;
   promptVersion?: string;
   model?: string;
   timeoutMs?: number;
@@ -144,7 +146,7 @@ export async function generateDiscoveryQuestion(
         schema: DISCOVERY_QUESTION_SCHEMA,
         contextOptions: { nodeKey: node.nodeKey },
       },
-      { provider: deps.provider, prompts, env: deps.env },
+      { provider: deps.provider, prompts, env: deps.env, cache: deps.cache },
     );
   } catch (error) {
     if (error instanceof OrchestratorError) {

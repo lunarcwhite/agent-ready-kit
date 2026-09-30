@@ -18,6 +18,7 @@
 import type { AppDatabase } from "../../infrastructure/database/db";
 import type { EnvLike } from "../../ai/providers/config";
 import type { AIProvider } from "../../ai/providers/types";
+import type { MemoryCache } from "../../ai/orchestration/cache";
 import { globalPrompts, PromptRegistry } from "../../ai/prompts/registry";
 import { IDEA_ANALYSIS_PROMPT, IDEA_ANALYSIS_PROMPT_KEY } from "../../ai/prompts/idea-analysis";
 import { IDEA_ANALYSIS_SCHEMA, type IdeaAnalysis } from "../../ai/schemas/idea-analysis";
@@ -46,6 +47,7 @@ export interface AnalyzeIdeaDeps {
   provider?: AIProvider;
   prompts?: PromptRegistry;
   env?: EnvLike;
+  cache?: MemoryCache | null;
   promptVersion?: string;
   model?: string;
   timeoutMs?: number;
@@ -141,7 +143,7 @@ export async function analyzeIdea(
         taskInput: buildTaskInput(detail),
         schema: IDEA_ANALYSIS_SCHEMA,
       },
-      { provider: deps.provider, prompts, env: deps.env },
+      { provider: deps.provider, prompts, env: deps.env, cache: deps.cache },
     );
   } catch (error) {
     if (error instanceof OrchestratorError) {

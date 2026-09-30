@@ -21,6 +21,7 @@ import type { AIProvider, CallOptions } from "../providers/types";
 import { PromptRegistry, globalPrompts } from "../prompts/registry";
 import { finishOperation, saveOperationPayloads, startOperation } from "../operations/ledger";
 import { DEFAULT_LIMITS, enforceGuards, GuardrailError, type GuardrailLimits } from "./guardrails";
+import { buildFingerprint, globalCache, type MemoryCache } from "./cache";
 import { buildRepairPrompt, shouldAttemptRepair } from "../validation/repair";
 import type { FieldSchema } from "../validation/schema";
 import { validateStructuredOutput } from "../validation/validator";
@@ -58,6 +59,9 @@ export interface OrchestratorDeps {
   prompts?: PromptRegistry;
   env?: EnvLike;
   limits?: Partial<GuardrailLimits>;
+  // Result cache (TASK-047). Defaults to the process-wide cache; pass null
+  // to disable — deterministic tests always pass null or their own instance.
+  cache?: MemoryCache | null;
 }
 
 function renderSystemText(parts: {
@@ -98,52 +102,114 @@ export async function orchestrate(
     raw.contextOptions,
   );
   const stateVersion = await getStateVersion(db, raw.userId, context.projectId);
-  const operation = await startOperation(db, raw.userId, {
-    projectId: context.projectId,
-    capability: raw.capability,
-    operationType: raw.operationType,
-    provider: provider.name,
-    model,
-    promptKey: prompt.key,
-    promptVersion: prompt.version,
-    projectStateVersion: stateVersion,
-  });
-
   const systemText = renderSystemText(prompt);
   const userText = `PROJECT CONTEXT\n${JSON.stringify(context)}\n\nTASK\n${raw.taskInput}`;
-  const callOptions: CallOptions = { model, timeoutMs };
-  const startedAt = Date.now();
+  const contextJson = JSON.stringify(context);
+  const limits = { ...DEFAULT_LIMITS, ...deps.limits };
+  const cache = deps.cache === undefined ? globalCache : deps.cache;
+  const fingerprint = cache
+    ? buildFingerprint({
+        capability: raw.capability,
+        userId: raw.userId,
+        projectId: context.projectId,
+        stateVersion,
+        promptKey: prompt.key,
+        promptVersion: prompt.version,
+        taskInput: raw.taskInput,
+        contextJson,
+      })
+    : null;
 
-  const fail = async (code: string, message: string): Promise<never> => {
-    await finishOperation(db, raw.userId, operation.id, {
+  const openOperation = (providerName: string, modelName: string) =>
+    startOperation(db, raw.userId, {
+      projectId: context.projectId,
+      capability: raw.capability,
+      operationType: raw.operationType,
+      provider: providerName,
+      model: modelName,
+      promptKey: prompt.key,
+      promptVersion: prompt.version,
+      projectStateVersion: stateVersion,
+    });
+
+  const failOperation = async (
+    operationId: string,
+    startedAt: number,
+    code: string,
+    message: string,
+  ): Promise<never> => {
+    await finishOperation(db, raw.userId, operationId, {
       status: "FAILED",
       errorCode: code,
       errorMessage: message,
       latencyMs: Date.now() - startedAt,
     });
-    throw new OrchestratorError(code, operation.id, message);
+    throw new OrchestratorError(code, operationId, message);
   };
+
+  const runGuards = async (operationId: string, startedAt: number): Promise<void> => {
+    try {
+      await enforceGuards(
+        db,
+        raw.userId,
+        context.projectId,
+        { taskInput: raw.taskInput, contextJson },
+        limits,
+      );
+    } catch (error) {
+      if (error instanceof GuardrailError) {
+        await saveOperationPayloads(db, raw.userId, operationId, {
+          input: { capability: raw.capability, refused: error.code },
+        }).catch(() => undefined);
+        return failOperation(operationId, startedAt, error.code, error.message);
+      }
+      throw error;
+    }
+  };
+
+  // TASK-047 cache fast path: equivalent requests skip provider spend.
+  // The hit still opens a ledger row (provider "cache") and passes the
+  // same guardrails, so usage stays observable and policy stays uniform.
+  if (cache && fingerprint) {
+    const hit = cache.get(fingerprint);
+    if (hit) {
+      const hitStartedAt = Date.now();
+      const operation = await openOperation("cache", hit.model);
+      await runGuards(operation.id, hitStartedAt);
+      await saveOperationPayloads(db, raw.userId, operation.id, {
+        input: { system: systemText, user: userText },
+        output: { cached: true, fingerprint },
+      }).catch(() => undefined);
+      const finished = await finishOperation(db, raw.userId, operation.id, {
+        status: "SUCCEEDED",
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: Date.now() - hitStartedAt,
+      });
+      return {
+        data: hit.data,
+        operationId: operation.id,
+        model: hit.model,
+        promptKey: prompt.key,
+        promptVersion: prompt.version,
+        repaired: false,
+        latencyMs: finished.latencyMs ?? Date.now() - hitStartedAt,
+      };
+    }
+  }
+
+  const operation = await openOperation(provider.name, model);
+
+  const callOptions: CallOptions = { model, timeoutMs };
+  const startedAt = Date.now();
 
   // TASK-046 preflight guardrails: fail-closed and ledger-recorded. The
   // operation row already exists so refusals stay observable; past this
   // point a violation means no provider spend and no canonical writes.
-  try {
-    await enforceGuards(
-      db,
-      raw.userId,
-      context.projectId,
-      { taskInput: raw.taskInput, contextJson: JSON.stringify(context) },
-      { ...DEFAULT_LIMITS, ...deps.limits },
-    );
-  } catch (error) {
-    if (error instanceof GuardrailError) {
-      await saveOperationPayloads(db, raw.userId, operation.id, {
-        input: { capability: raw.capability, refused: error.code },
-      }).catch(() => undefined);
-      return fail(error.code, error.message);
-    }
-    throw error;
-  }
+  await runGuards(operation.id, startedAt);
+
+  const fail = async (code: string, message: string): Promise<never> =>
+    failOperation(operation.id, startedAt, code, message);
 
   let recoveryUsed = false;
   let activeUserText = userText;
@@ -173,6 +239,10 @@ export async function orchestrate(
     const parsed = safeParse(rawText);
     const validation = validateStructuredOutput(raw.schema, parsed);
     if (validation.ok) {
+      // TASK-047: store validated success for equivalent future requests.
+      // Keyed on the canonical inputs (not retry artifacts), so a repaired
+      // success still serves the original equivalent request later.
+      if (cache && fingerprint) cache.set(fingerprint, { data: parsed, model });
       await saveOperationPayloads(db, raw.userId, operation.id, {
         input: { system: systemText, user: userText },
         output: { rawText, repaired: recoveryUsed },
