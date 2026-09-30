@@ -102,3 +102,38 @@ export const decisionHistory = pgTable(
   },
   (table) => [index("decision_history_decision_id_idx").on(table.decisionId)],
 );
+
+// Decision dependency graph (TASK-022, database-schema.md §17).
+//
+// One row = one deterministic rule: "when source_key takes a matching value,
+// apply effect to target_key". Keys are dot-notation logic keys (validated in
+// the domain layer), NOT stable codes — rules follow concepts, and concepts
+// keep their keys for life. No UNIQUE pair constraint: the same ordered pair
+// may carry different rules for different values (e.g. true→REQUIRE,
+// false→MARK_NOT_APPLICABLE); exact duplicates are rejected in domain logic.
+export const decisionDependencyEffect = pgEnum("decision_dependency_effect", [
+  "ACTIVATE",
+  "REQUIRE",
+  "INVALIDATE",
+  "MARK_NOT_APPLICABLE",
+]);
+
+export const decisionDependencies = pgTable(
+  "decision_dependencies",
+  {
+    ...uuidPrimaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id),
+    sourceDecisionKey: varchar("source_decision_key", { length: 128 }).notNull(),
+    targetDecisionKey: varchar("target_decision_key", { length: 128 }).notNull(),
+    condition: jsonb("condition"),
+    effect: decisionDependencyEffect("effect").notNull(),
+    ...timestampColumns(),
+  },
+  (table) => [
+    index("decision_dependencies_project_id_idx").on(table.projectId),
+    index("decision_dependencies_source_idx").on(table.projectId, table.sourceDecisionKey),
+    index("decision_dependencies_target_idx").on(table.projectId, table.targetDecisionKey),
+  ],
+);

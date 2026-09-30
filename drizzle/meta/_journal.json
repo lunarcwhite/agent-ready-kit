@@ -36,6 +36,13 @@
       "when": 1790738898330,
       "tag": "0004_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": 7,
+      "when": 1790739774821,
+      "tag": "0005_decision_dependencies",
+      "breakpoints": true
     }
   ]
 }

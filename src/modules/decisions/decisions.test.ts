@@ -26,6 +26,7 @@ import {
   updateDecision,
   type CreateDecisionInput,
 } from "./decisions";
+import { listDependencies, registerDependency } from "./dependencies";
 
 const BASE: CreateDecisionInput = {
   decisionKey: "authentication.required",
@@ -274,6 +275,186 @@ describeDb("decision domain model (integration)", () => {
         await expect(
           getDecisionByKey(db, a.id, project.project.id, "nope.missing"),
         ).rejects.toBeInstanceOf(DecisionNotFoundError);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("cascades NOT_APPLICABLE and reopens on re-enable with one version bump", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `dep-${Date.now()}@example.com` })
+          .returning();
+        const project = await createProject(db, owner.id, { name: "G", idea: "graph" });
+        const pid = project.project.id;
+        const parent = await createDecision(db, owner.id, pid, {
+          ...BASE,
+          decisionKey: "payment.required",
+          category: "pay",
+          title: "Payment required",
+          value: true,
+        });
+        const child = await createDecision(db, owner.id, pid, {
+          ...BASE,
+          decisionKey: "payment.provider",
+          category: "pay",
+          title: "Payment provider",
+          value: "STRIPE",
+        });
+        await registerDependency(db, owner.id, pid, {
+          sourceKey: parent.decisionKey,
+          targetKey: child.decisionKey,
+          condition: { equals: false },
+          effect: "MARK_NOT_APPLICABLE",
+        });
+
+        const before = await getStateVersion(db, owner.id, pid);
+        await updateDecision(db, owner.id, pid, parent.decisionKey, { value: false });
+        const na = await getDecisionByKey(db, owner.id, pid, child.decisionKey);
+        expect(na.status).toBe("NOT_APPLICABLE");
+        expect(na.value).toBe("STRIPE");
+        // One user action, one version — derived writes share the bump.
+        expect(await getStateVersion(db, owner.id, pid)).toBe(before + 1);
+
+        await updateDecision(db, owner.id, pid, parent.decisionKey, { value: true });
+        const reopened = await getDecisionByKey(db, owner.id, pid, child.decisionKey);
+        expect(reopened.status).toBe("UNRESOLVED");
+        expect(reopened.value).toBe("STRIPE");
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("never auto-reopens human-authored NOT_APPLICABLE", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `depman-${Date.now()}@example.com` })
+          .returning();
+        const project = await createProject(db, owner.id, { name: "M", idea: "manual" });
+        const pid = project.project.id;
+        const parent = await createDecision(db, owner.id, pid, {
+          ...BASE,
+          decisionKey: "payment.required",
+          category: "pay",
+          title: "Payment required",
+          value: true,
+        });
+        const child = await createDecision(db, owner.id, pid, {
+          ...BASE,
+          decisionKey: "payment.provider",
+          category: "pay",
+          title: "Payment provider",
+          value: "STRIPE",
+        });
+        await registerDependency(db, owner.id, pid, {
+          sourceKey: parent.decisionKey,
+          targetKey: child.decisionKey,
+          condition: { equals: false },
+          effect: "MARK_NOT_APPLICABLE",
+        });
+
+        // Human shelves the child deliberately (no system reason recorded).
+        await updateDecision(db, owner.id, pid, child.decisionKey, { status: "NOT_APPLICABLE" });
+        await updateDecision(db, owner.id, pid, parent.decisionKey, { value: false });
+        await updateDecision(db, owner.id, pid, parent.decisionKey, { value: true });
+        const still = await getDecisionByKey(db, owner.id, pid, child.decisionKey);
+        expect(still.status).toBe("NOT_APPLICABLE");
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("propagates chains, rejects cycles/duplicates, isolates by owner", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const stamp = Date.now();
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `chain-${stamp}@example.com` })
+          .returning();
+        const [other] = await db
+          .insert(schema.users)
+          .values({ email: `chain-o-${stamp}@example.com` })
+          .returning();
+        const project = await createProject(db, owner.id, { name: "C", idea: "chain" });
+        const pid = project.project.id;
+        for (const [key, cat] of [
+          ["a.x", "aa"],
+          ["b.y", "bb"],
+          ["c.z", "cc"],
+        ] as const) {
+          await createDecision(db, owner.id, pid, {
+            ...BASE,
+            decisionKey: key,
+            category: cat,
+            title: key,
+            status: "CONFIRMED",
+            value: true,
+          });
+        }
+        await registerDependency(db, owner.id, pid, {
+          sourceKey: "a.x",
+          targetKey: "b.y",
+          effect: "MARK_NOT_APPLICABLE",
+        });
+        await registerDependency(db, owner.id, pid, {
+          sourceKey: "b.y",
+          targetKey: "c.z",
+          effect: "MARK_NOT_APPLICABLE",
+        });
+
+        await updateDecision(db, owner.id, pid, "a.x", { value: false });
+        expect((await getDecisionByKey(db, owner.id, pid, "b.y")).status).toBe("NOT_APPLICABLE");
+        expect((await getDecisionByKey(db, owner.id, pid, "c.z")).status).toBe("NOT_APPLICABLE");
+
+        // Cycle, exact duplicate, and dangling ends are rejected.
+        await expect(
+          registerDependency(db, owner.id, pid, {
+            sourceKey: "c.z",
+            targetKey: "a.x",
+            effect: "REQUIRE",
+          }),
+        ).rejects.toBeInstanceOf(DecisionValidationError);
+        await expect(
+          registerDependency(db, owner.id, pid, {
+            sourceKey: "a.x",
+            targetKey: "b.y",
+            effect: "MARK_NOT_APPLICABLE",
+          }),
+        ).rejects.toBeInstanceOf(DecisionValidationError);
+        await expect(
+          registerDependency(db, owner.id, pid, {
+            sourceKey: "a.x",
+            targetKey: "ghost.key",
+            effect: "REQUIRE",
+          }),
+        ).rejects.toBeInstanceOf(DecisionNotFoundError);
+
+        // Foreign project scope fails closed.
+        await expect(
+          registerDependency(db, other.id, pid, {
+            sourceKey: "a.x",
+            targetKey: "b.y",
+            effect: "REQUIRE",
+          }),
+        ).rejects.toBeInstanceOf(ProjectNotFoundError);
+        await expect(listDependencies(db, other.id, pid)).rejects.toBeInstanceOf(
+          ProjectNotFoundError,
+        );
+        expect(await listDependencies(db, owner.id, pid)).toHaveLength(2);
       });
     } finally {
       await pool.end();

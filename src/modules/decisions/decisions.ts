@@ -1,21 +1,29 @@
 // Decision domain model (TASK-021, FR-020–022, database-schema.md §11–§16).
 //
-// Persistence mechanics only: store structured decisions with stable codes,
-// snapshot every change into decision_history, and number each accepted
-// change on the project state version (TASK-020). NOT here: dependency
-// evaluation (TASK-022), provenance mapping service (TASK-025), status
-// transition approval policy (TASK-054 reviews), and any LLM semantics.
+// Persistence mechanics plus deterministic dependency evaluation: store
+// structured decisions with stable codes, snapshot every change into
+// decision_history, number each accepted change on the project state version
+// (TASK-020), and cascade outgoing dependency rules (TASK-022). NOT here:
+// provenance mapping service (TASK-025), status transition approval policy
+// (TASK-054 reviews), and any LLM semantics.
 //
 // Entry rule (TASK-014): every function resolves ownership through
 // requireProjectScope first — nested callers pass a project_id they never
 // touch directly.
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
 import { allocateStableIdTx } from "../../infrastructure/database/identifiers";
 import { decisions, decisionHistory } from "../../infrastructure/database/schema/decisions";
 import { normalizeCategory } from "../../shared/identifiers";
 import { requireProjectScope } from "../projects/repository";
 import { incrementStateVersion } from "../projects/state-version";
+import {
+  DEPENDENCY_REASON_PREFIX,
+  listDependencies,
+  matchesCondition,
+  resolveEffect,
+  type DependencyRow,
+} from "./dependencies";
 import { DecisionNotFoundError, DecisionValidationError } from "./errors";
 
 export const DECISION_STATUSES = [
@@ -252,6 +260,9 @@ export async function createDecision(
     if (!inserted) throw new DecisionNotFoundError("Decision creation failed.");
     const row = toRow(inserted);
     await insertHistorySnapshot(tx, row, userId, "created");
+    if (row.value !== null) {
+      await evaluateDependents(tx, userId, scope.projectId, decisionKey, row.value, new Set());
+    }
     await incrementStateVersion(tx, userId, scope.projectId);
     return row;
   });
@@ -269,6 +280,107 @@ async function loadScoped(
   });
   if (!found) throw new DecisionNotFoundError();
   return toRow(found);
+}
+
+// Null-returning variant for evaluation paths: an edge pointing at a
+// removed decision must never fail its parent's write (orphan skip).
+async function loadScopedOrNull(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+  decisionKey: string,
+): Promise<DecisionRow | null> {
+  try {
+    return await loadScoped(db, userId, projectId, decisionKey);
+  } catch (error) {
+    if (error instanceof DecisionNotFoundError) return null;
+    throw error;
+  }
+}
+
+// Applies outgoing dependency rules for a freshly written source value,
+// inside the caller's transaction (TASK-022). Chains (A→B→C) recurse with
+// a visited set; registration-time cycle rejection guarantees termination,
+// the set is belt-and-braces. Derived writes share the caller's single
+// project version bump — one user action, one version.
+async function evaluateDependents(
+  tx: AppDatabase,
+  userId: string,
+  projectId: string,
+  sourceKey: string,
+  sourceValue: unknown,
+  visited: Set<string>,
+): Promise<void> {
+  if (sourceValue === null || visited.has(sourceKey)) return;
+  visited.add(sourceKey);
+  const edges = await listDependencies(tx, userId, projectId);
+  for (const edge of edges) {
+    if (edge.sourceDecisionKey !== sourceKey) continue;
+    if (!matchesCondition(edge.condition, sourceValue)) {
+      if (edge.effect === "MARK_NOT_APPLICABLE") {
+        await maybeReopenDependent(tx, userId, projectId, edge, sourceKey, visited);
+      }
+      continue;
+    }
+    const target = await loadScopedOrNull(tx, userId, projectId, edge.targetDecisionKey);
+    if (!target) continue;
+    const next = resolveEffect(edge.effect, target.status);
+    if (!next) continue;
+    const [updated] = await tx
+      .update(decisions)
+      .set({
+        status: next.status,
+        ...(next.clearValue ? { value: null as object | null } : {}),
+        version: target.version + 1,
+      })
+      .where(eq(decisions.id, target.id))
+      .returning();
+    if (!updated) continue;
+    const row = toRow(updated);
+    await insertHistorySnapshot(
+      tx,
+      row,
+      userId,
+      `${DEPENDENCY_REASON_PREFIX}${sourceKey} → ${edge.effect}`,
+    );
+    await evaluateDependents(tx, userId, projectId, edge.targetDecisionKey, row.value, visited);
+  }
+}
+
+// Guarded reopen: only when the target is still NOT_APPLICABLE AND its
+// latest history row was system-applied. Human-authored NA (custom reason
+// or none) is never auto-reverted — reopening it would silently overwrite
+// a deliberate human decision (AGENTS.md §34, §106).
+async function maybeReopenDependent(
+  tx: AppDatabase,
+  userId: string,
+  projectId: string,
+  edge: DependencyRow,
+  sourceKey: string,
+  visited: Set<string>,
+): Promise<void> {
+  const target = await loadScopedOrNull(tx, userId, projectId, edge.targetDecisionKey);
+  if (!target || target.status !== "NOT_APPLICABLE") return;
+  const [latest] = await tx.query.decisionHistory.findMany({
+    where: eq(decisionHistory.decisionId, target.id),
+    orderBy: [desc(decisionHistory.version)],
+    limit: 1,
+  });
+  if (!latest?.changeReason?.startsWith(DEPENDENCY_REASON_PREFIX)) return;
+  const [updated] = await tx
+    .update(decisions)
+    .set({ status: "UNRESOLVED", version: target.version + 1 })
+    .where(eq(decisions.id, target.id))
+    .returning();
+  if (!updated) return;
+  const row = toRow(updated);
+  await insertHistorySnapshot(
+    tx,
+    row,
+    userId,
+    `${DEPENDENCY_REASON_PREFIX}${sourceKey} cleared → reopened`,
+  );
+  await evaluateDependents(tx, userId, projectId, edge.targetDecisionKey, row.value, visited);
 }
 
 export async function getDecisionByKey(
@@ -371,6 +483,9 @@ export async function updateDecision(
     if (!updated) throw new DecisionNotFoundError();
     const row = toRow(updated);
     await insertHistorySnapshot(tx, row, userId, changeReason);
+    if (row.value !== null) {
+      await evaluateDependents(tx, userId, current.projectId, key, row.value, new Set());
+    }
     await incrementStateVersion(tx, userId, current.projectId);
     return row;
   });
