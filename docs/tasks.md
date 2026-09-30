@@ -693,7 +693,7 @@ Document generation must not become the canonical model.
 
 # TASK-020 — Implement Project State Versioning
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M2
 

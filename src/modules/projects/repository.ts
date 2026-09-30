@@ -9,15 +9,16 @@
 // TASK-020 / readiness, never to a generic update.
 //
 // createProject is intentionally NOT transactional: TASK-005's job runner is
-// synchronous and TASK-020's version-row write doesn't exist yet, so there is
-// no second write to roll back. Keep the transaction out until a task adds
-// a genuine second write (transaction boundaries: AGENTS.md §51).
-import { and, desc, eq, isNull } from "drizzle-orm";
+// synchronous and the initial insert has no companion write worth rolling
+// back with it (transaction boundaries: AGENTS.md §51). updateProject below
+// IS transactional — its version bump (TASK-020) must commit with the data.
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
 import { projectInputs, projects, projectSettings } from "../../infrastructure/database/schema";
 import { assertProjectOwnership } from "./authorization";
 import { ProjectNotFoundError, ProjectValidationError } from "./errors";
 import { deriveSlug } from "./slugs";
+import { incrementStateVersion } from "./state-version";
 
 export const MAX_NAME_LENGTH = 255;
 const MAX_IDEA_LENGTH = 20000;
@@ -264,7 +265,8 @@ export async function requireProjectScope(
 // Soft-delete per database-schema.md §63: the row stays for retention, but
 // every read path filters deleted_at IS NULL so it becomes inaccessible.
 // One atomic scoped UPDATE — missing, foreign, or already-archived rows all
-// surface as NotFound without revealing which case applied.
+// surface as NotFound without revealing which case applied. The version bump
+// rides the same statement (TASK-020): archival is a canonical change too.
 export async function archiveProject(
   db: AppDatabase,
   userId: string,
@@ -273,7 +275,7 @@ export async function archiveProject(
   if (userId.trim() === "") throw new ProjectValidationError("Owner is required.");
   const [archived] = await db
     .update(projects)
-    .set({ deletedAt: new Date() })
+    .set({ deletedAt: new Date(), stateVersion: sql`${projects.stateVersion} + 1` })
     .where(and(eq(projects.id, projectId), eq(projects.userId, userId), isNull(projects.deletedAt)))
     .returning({ id: projects.id });
   if (!archived) throw new ProjectNotFoundError();
@@ -330,16 +332,43 @@ export async function updateProject(
     return { settings: next };
   })();
 
-  const [project] = await db
-    .update(projects)
-    .set({ ...patch })
-    .where(and(eq(projects.id, projectId), eq(projects.userId, userId), isNull(projects.deletedAt)))
-    .returning();
-  if (!project) throw new ProjectNotFoundError();
-  if (Object.keys(inputPatch).length > 0) {
-    await db.update(projectInputs).set(inputPatch).where(eq(projectInputs.id, current.input.id));
+  const touchesCanonical = Object.keys(patch).length > 0 || Object.keys(inputPatch).length > 0;
+  // No-op calls return current state untouched: no writes, no version bump,
+  // and no empty-SET update (which some drivers reject).
+  if (!touchesCanonical && !settingsPatch) return current;
+
+  if (touchesCanonical) {
+    // Canonical edits and their version bump commit atomically (TASK-020):
+    // data and version number can never diverge, and a failed apply leaves
+    // the approved version untouched — including AI-driven failures, which
+    // never reach this path unvalidated (agents.md AG-INV-001/006).
+    await db.transaction(async (tx) => {
+      if (Object.keys(patch).length > 0) {
+        const [updated] = await tx
+          .update(projects)
+          .set({ ...patch })
+          .where(
+            and(
+              eq(projects.id, projectId),
+              eq(projects.userId, userId),
+              isNull(projects.deletedAt),
+            ),
+          )
+          .returning({ id: projects.id });
+        if (!updated) throw new ProjectNotFoundError();
+      }
+      if (Object.keys(inputPatch).length > 0) {
+        await tx
+          .update(projectInputs)
+          .set(inputPatch)
+          .where(eq(projectInputs.id, current.input.id));
+      }
+      await incrementStateVersion(tx, userId, projectId);
+    });
   }
   if (settingsPatch) {
+    // Preferences ride a single statement with no version bump: they are
+    // not canonical state (see state-version.ts).
     await db
       .update(projectSettings)
       .set(settingsPatch)

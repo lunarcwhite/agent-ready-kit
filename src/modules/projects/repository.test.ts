@@ -5,6 +5,7 @@
 // behavior, so they run as rolled-back integration tests — skipped, not
 // failed, without TEST_DATABASE_URL/DATABASE_URL.
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { AppDatabase } from "../../infrastructure/database/db";
@@ -22,6 +23,7 @@ import {
   listProjects,
   updateProject,
 } from "./repository";
+import { getStateVersion, incrementStateVersion } from "./state-version";
 
 describe("deriveSlug", () => {
   it("derives readable slugs and folds diacritics", () => {
@@ -164,9 +166,11 @@ describeDb("project persistence (integration)", () => {
         expect(updated.input.constraints).toBe("offline-first");
         expect(updated.settings.settings).toMatchObject({ preferred_language: "id" });
         // Canonical columns stay server-owned: the update path has no input
-        // for them, so lifecycle/stateVersion survive untouched.
+        // for them, so lifecycle survives untouched. stateVersion DOES move
+        // (TASK-020): name/constraints are canonical edits, so update + bump
+        // commit atomically as version 2.
         expect(updated.project.lifecycleState).toBe("DISCOVERY");
-        expect(updated.project.stateVersion).toBe(1);
+        expect(updated.project.stateVersion).toBe(2);
       });
     } finally {
       await pool.end();
@@ -278,6 +282,101 @@ describeDb("project persistence (integration)", () => {
 
         const listed = await listProjects(db, owner.id);
         expect(listed.map((project) => project.name)).toEqual(["Newer", "Older"]);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("bumps the version atomically with canonical edits", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `ver-${Date.now()}@example.com` })
+          .returning();
+        const created = await createProject(db, owner.id, { name: "V", idea: "one" });
+        expect(await getStateVersion(db, owner.id, created.project.id)).toBe(1);
+
+        const renamed = await updateProject(db, owner.id, created.project.id, { name: "V2" });
+        expect(renamed.project.name).toBe("V2");
+        expect(renamed.project.stateVersion).toBe(2);
+
+        // Standalone bump composes the same way a future decision-apply
+        // will: numbered, scoped, race-safe.
+        expect(await incrementStateVersion(db, owner.id, created.project.id)).toBe(3);
+        expect(await getStateVersion(db, owner.id, created.project.id)).toBe(3);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("leaves the version alone for settings-only and no-op updates", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `verp-${Date.now()}@example.com` })
+          .returning();
+        const created = await createProject(db, owner.id, { name: "P", idea: "one" });
+
+        const prefs = await updateProject(db, owner.id, created.project.id, {
+          preferredLanguage: "id",
+        });
+        expect(prefs.project.stateVersion).toBe(1);
+
+        const noop = await updateProject(db, owner.id, created.project.id, {});
+        expect(noop.project.stateVersion).toBe(1);
+        expect(await getStateVersion(db, owner.id, created.project.id)).toBe(1);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("never bumps the version on failed updates", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `verf-${Date.now()}@example.com` })
+          .returning();
+        const created = await createProject(db, owner.id, { name: "F", idea: "one" });
+        await expect(
+          updateProject(db, owner.id, created.project.id, { name: "n".repeat(256) }),
+        ).rejects.toBeInstanceOf(ProjectValidationError);
+        expect(await getStateVersion(db, owner.id, created.project.id)).toBe(1);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("numbers archival in the same statement", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `vera-${Date.now()}@example.com` })
+          .returning();
+        const created = await createProject(db, owner.id, { name: "A", idea: "one" });
+        await archiveProject(db, owner.id, created.project.id);
+        // Raw read bypassing the deleted_at filter: retention row carries
+        // both the archive marker and its version number.
+        const retained = await db.query.projects.findFirst({
+          where: eq(schema.projects.id, created.project.id),
+        });
+        expect(retained?.deletedAt).toBeInstanceOf(Date);
+        expect(retained?.stateVersion).toBe(2);
       });
     } finally {
       await pool.end();
