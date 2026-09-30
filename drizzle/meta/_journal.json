@@ -120,6 +120,20 @@
       "when": 1790797400000,
       "tag": "0016_project_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": 7,
+      "when": 1790797500000,
+      "tag": "0017_specifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": 7,
+      "when": 1790797600000,
+      "tag": "0018_section_dependencies",
+      "breakpoints": true
     }
   ]
 }

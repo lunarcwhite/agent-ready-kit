@@ -1781,7 +1781,7 @@ Compile canonical project state into versioned implementation-oriented specifica
 
 # TASK-060 — Implement Specification Domain Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
@@ -1809,7 +1809,7 @@ Persist specification artifacts and sections independently from canonical knowle
 
 # TASK-061 — Implement Specification Dependency Tracking
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
@@ -1835,7 +1835,7 @@ Track which canonical objects influence each specification section.
 
 # TASK-062 — Implement Product Specification Compiler
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
