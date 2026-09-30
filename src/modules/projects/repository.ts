@@ -43,6 +43,7 @@ export interface ProjectRow {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+  archivedAt: Date | null;
 }
 
 export interface ProjectInputRow {
@@ -221,8 +222,10 @@ export async function getProject(
   return toDetail(project, input ?? null, settings ?? null);
 }
 
-// Project list for SCREEN-003 (TASK-012): owned, non-archived projects only,
-// most recently updated first. Returns lean rows — no input/settings joins
+// Project list for SCREEN-003 (TASK-012): owned, non-deleted projects only,
+// most recently updated first. Archived (read-only) projects are INCLUDED
+// with archivedAt set — the UI gates editing off that flag (TASK-130).
+// Returns lean rows — no input/settings joins
 // (AGENTS.md §91): the list shows name/state/readiness/updated, nothing more.
 export async function listProjects(db: AppDatabase, userId: string): Promise<ProjectRow[]> {
   if (userId.trim() === "") throw new ProjectValidationError("Owner is required.");
@@ -267,6 +270,23 @@ export async function requireProjectScope(
 // One atomic scoped UPDATE — missing, foreign, or already-archived rows all
 // surface as NotFound without revealing which case applied. The version bump
 // rides the same statement (TASK-020): archival is a canonical change too.
+//
+// TASK-130 archive vs soft-delete, side by side:
+// - archiveProject (deleted_at): project VANISHES from reads. Kept as-is for
+//   existing callers/tests; do not rename it.
+// - setProjectArchived (archived_at): project stays VISIBLE but READ-ONLY —
+//   updateProject rejects it until restoreProject clears the marker.
+// restoreProject clears BOTH markers, so one call recovers from either state.
+// Re-archiving an archived project is an idempotent no-op: it returns the
+// current row WITHOUT a version bump (archiving twice is not a change).
+// Restoring a live project (neither marker) is NotFound, mirroring the
+// archive-twice rule above.
+//
+// Scope notes (MVP): read-only is enforced at updateProject level only.
+// Nested modules (decisions/knowledge/...) enter through
+// requireProjectScope, which does not know about archived_at — blocking
+// nested writes on archived projects is follow-up work. Retention likewise
+// has no cleanup job: rows are kept indefinitely (deferrable per TASK-130).
 export async function archiveProject(
   db: AppDatabase,
   userId: string,
@@ -281,6 +301,75 @@ export async function archiveProject(
   if (!archived) throw new ProjectNotFoundError();
 }
 
+// Read-only predicate for the TASK-130 archive marker (pure: no DB touch,
+// so UI gating and tests can use it without a database).
+export function isProjectArchived(project: Pick<ProjectRow, "archivedAt">): boolean {
+  return project.archivedAt !== null;
+}
+
+// Archive (read-only) per TASK-130: sets archived_at and bumps the version
+// atomically. The project stays visible in getProject/listProjects but
+// updateProject rejects it until restoreProject. Soft-deleted rows are out
+// of reach (deleted_at IS NULL scope): archiving them is NotFound, and
+// cross-user attempts are NotFound without revealing existence (TASK-014).
+export async function setProjectArchived(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+): Promise<ProjectRow> {
+  if (userId.trim() === "") throw new ProjectValidationError("Owner is required.");
+  const current = (await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.userId, userId), isNull(projects.deletedAt)),
+  })) as ProjectRow | undefined;
+  if (!current) throw new ProjectNotFoundError();
+  assertProjectOwnership(current.userId, userId);
+  // Idempotent re-archive: already archived returns the current row with no
+  // extra version bump — a repeated archive is not a canonical change.
+  if (isProjectArchived(current)) return current;
+  const [archived] = await db
+    .update(projects)
+    .set({ archivedAt: new Date(), stateVersion: sql`${projects.stateVersion} + 1` })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.userId, userId),
+        isNull(projects.deletedAt),
+        isNull(projects.archivedAt),
+      ),
+    )
+    .returning();
+  if (!archived) throw new ProjectNotFoundError();
+  return archived as ProjectRow;
+}
+
+// Restore per TASK-130: clears BOTH archived_at and deleted_at, so one call
+// recovers from archive or soft-delete, then bumps the version atomically —
+// the project becomes editable again. The lookup deliberately ignores the
+// deleted_at filter (a soft-deleted row must be findable to be restored).
+// Missing, foreign, or already-live rows surface as NotFound.
+export async function restoreProject(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+): Promise<ProjectRow> {
+  if (userId.trim() === "") throw new ProjectValidationError("Owner is required.");
+  const current = (await db.query.projects.findFirst({
+    where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
+  })) as ProjectRow | undefined;
+  if (!current) throw new ProjectNotFoundError();
+  assertProjectOwnership(current.userId, userId);
+  if (current.deletedAt === null && current.archivedAt === null) {
+    throw new ProjectNotFoundError("Project is not archived or deleted.");
+  }
+  const [restored] = await db
+    .update(projects)
+    .set({ deletedAt: null, archivedAt: null, stateVersion: sql`${projects.stateVersion} + 1` })
+    .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+    .returning();
+  if (!restored) throw new ProjectNotFoundError();
+  return restored as ProjectRow;
+}
+
 export async function updateProject(
   db: AppDatabase,
   userId: string,
@@ -292,6 +381,12 @@ export async function updateProject(
   if (raw.name === null) throw new ProjectValidationError("name is required.");
   if (raw.idea === null) throw new ProjectValidationError("idea is required.");
   const current = await getProject(db, userId, projectId);
+  // TASK-130 read-only enforcement: archived projects reject EVERY update —
+  // canonical, settings-only, and even no-op calls — until restoreProject.
+  // Soft-deleted rows never reach here (getProject filters them to NotFound).
+  if (isProjectArchived(current.project)) {
+    throw new ProjectValidationError("Project is archived and read-only.");
+  }
 
   const patch: Partial<{ name: string; slug: string; description: string | null }> = {};
   if (raw.name !== undefined && raw.name !== null) {

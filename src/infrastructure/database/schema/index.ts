@@ -11,3 +11,7 @@ export * from "./traceability";
 export * from "./discovery";
 export * from "./ai-operations";
 export * from "./knowledge";
+export * from "./architecture";
+export * from "./validation";
+export * from "./user-tasks";
+export * from "./jobs";

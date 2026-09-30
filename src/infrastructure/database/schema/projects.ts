@@ -3,8 +3,11 @@
 // `projects` is the aggregate root: one row per user-owned project. Reads in
 // the domain service always scope to (id, user_id) plus deleted_at IS NULL,
 // so cross-user access is impossible at the query level (centralized policy
-// lands in TASK-014). `deleted_at` exists now so rows are born soft-deletable;
-// delete/archive behavior itself belongs to TASK-130.
+// lands in TASK-014). `deleted_at` is the soft-delete marker (TASK-130):
+// the row is retained but hidden from every read path. `archived_at` is the
+// separate read-only marker (TASK-130): an archived project stays VISIBLE in
+// reads but rejects updates until restored. Retention has no cleanup job yet
+// — rows are retained indefinitely (TASK-130 acceptance: deferrable).
 //
 // `project_inputs` preserves the original idea-capture separately from
 // normalized knowledge (which lands in M5). `project_settings` holds free-form
@@ -70,8 +73,12 @@ export const projects = pgTable(
     stateVersion: integer("state_version").notNull().default(1),
     ...timestampColumns(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
-  (table) => [index("projects_user_id_idx").on(table.userId)],
+  (table) => [
+    index("projects_user_id_idx").on(table.userId),
+    index("projects_archived_at_idx").on(table.archivedAt),
+  ],
 );
 
 export const projectInputs = pgTable(

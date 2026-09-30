@@ -1667,7 +1667,7 @@ Non-Functional Requirements
 
 # TASK-056 — Implement Knowledge Curator
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M5
 
@@ -1872,7 +1872,7 @@ Compile `PRD.md` from canonical project state.
 
 # TASK-059 — Implement README Compiler, Architecture Component & Screen Models
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
@@ -2152,7 +2152,7 @@ Detect incomplete, contradictory, unsupported, and uncovered project definitions
 
 # TASK-070 — Implement Validation Issue Domain Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M7
 
@@ -2614,7 +2614,7 @@ Transform stable specifications into executable implementation work.
 
 # TASK-090 — Implement Implementation Task Domain Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M9
 
@@ -3139,7 +3139,7 @@ Connect the domain systems into the complete end-to-end product experience.
 
 # TASK-110 — Implement Application Shell
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M11
 
@@ -3379,7 +3379,7 @@ Advanced entity search may be deferred.
 
 # TASK-130 — Implement Project Delete/Archive
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 
@@ -3406,7 +3406,7 @@ spec-decisions.md D-A07/08/09).
 
 # TASK-131 — Implement Background Job Persistence
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P1
 **Milestone:** M0
 

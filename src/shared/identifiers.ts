@@ -10,7 +10,7 @@
 // - never array-index or LLM derived (monotonic per-counter sequences);
 // - never reused after removal (counters only move forward).
 
-export type IdentifierFamily = "DEC" | "FR" | "ENT" | "ARC" | "SCREEN" | "TASK" | "ISSUE" | "ASM";
+export type IdentifierFamily = "DEC" | "FR" | "ENT" | "ARC" | "SCREEN" | "TASK" | "ISSUE" | "ASM" | "UTASK";
 
 export class IdentifierError extends Error {
   constructor(message: string) {
@@ -28,6 +28,11 @@ const FAMILIES: readonly IdentifierFamily[] = [
   "TASK",
   "ISSUE",
   "ASM",
+  // TASK-090 (spec-decisions.md D-A10b): user-project tasks use UTASK-001…
+  // so the implementation-plan TASK-xxx namespace stays unambiguous.
+  // The generic FAMILY-NNN path in format/buildCounter/parse already covers
+  // this family — no logic change needed beyond registration.
+  "UTASK",
 ];
 
 // Category infix for DEC codes (e.g. AUTH in DEC-AUTH-001). Caller-supplied —

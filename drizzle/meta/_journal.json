@@ -85,6 +85,41 @@
       "when": 1790796000000,
       "tag": "0011_knowledge",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": 7,
+      "when": 1790797000000,
+      "tag": "0012_arc_screen",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": 7,
+      "when": 1790797100000,
+      "tag": "0013_validation",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": 7,
+      "when": 1790797200000,
+      "tag": "0014_user_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": 7,
+      "when": 1790797300000,
+      "tag": "0015_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": 7,
+      "when": 1790797400000,
+      "tag": "0016_project_archive",
+      "breakpoints": true
     }
   ]
 }

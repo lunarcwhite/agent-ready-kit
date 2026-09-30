@@ -109,6 +109,12 @@ const KEY_PATTERN = /^[a-z0-9_]+(\.[a-z0-9_]+)*$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function requireKey(raw: string): string {
+  return normalizeKnowledgeKey(raw);
+}
+
+// Exported for proposal-validating callers (curator, TASK-056): same rule,
+// same error, no duplicated pattern. Throws KnowledgeValidationError.
+export function normalizeKnowledgeKey(raw: string): string {
   const key = raw.trim().toLowerCase();
   if (key === "") throw new KnowledgeValidationError("knowledgeKey is required.");
   if (key.length > MAX_KEY_LENGTH) {
