@@ -15,7 +15,13 @@ import {
 } from "../../infrastructure/database/test-utils";
 import { deriveSlug } from "./slugs";
 import { ProjectNotFoundError, ProjectValidationError } from "./errors";
-import { createProject, getProject, updateProject } from "./repository";
+import {
+  createProject,
+  archiveProject,
+  getProject,
+  listProjects,
+  updateProject,
+} from "./repository";
 
 describe("deriveSlug", () => {
   it("derives readable slugs and folds diacritics", () => {
@@ -63,6 +69,11 @@ describe("project input validation", () => {
     await expect(updateProject(db, "u-1", "p-1", { name: null })).rejects.toBeInstanceOf(
       ProjectValidationError,
     );
+  });
+
+  it("rejects blank owner on list without touching the database", async () => {
+    const db = {} as AppDatabase;
+    await expect(listProjects(db, "   ")).rejects.toBeInstanceOf(ProjectValidationError);
   });
 });
 
@@ -156,6 +167,117 @@ describeDb("project persistence (integration)", () => {
         // for them, so lifecycle/stateVersion survive untouched.
         expect(updated.project.lifecycleState).toBe("DISCOVERY");
         expect(updated.project.stateVersion).toBe(1);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("archives a project and hides it from read and update afterwards", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `arc-${Date.now()}@example.com` })
+          .returning();
+        const created = await createProject(db, owner.id, { name: "Ephemeral", idea: "Gone." });
+        await archiveProject(db, owner.id, created.project.id);
+        await expect(getProject(db, owner.id, created.project.id)).rejects.toBeInstanceOf(
+          ProjectNotFoundError,
+        );
+        await expect(
+          updateProject(db, owner.id, created.project.id, { description: "resurrect" }),
+        ).rejects.toBeInstanceOf(ProjectNotFoundError);
+        // Archiving twice is NotFound, not a silent no-op success.
+        await expect(archiveProject(db, owner.id, created.project.id)).rejects.toBeInstanceOf(
+          ProjectNotFoundError,
+        );
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("rejects cross-user archive attempts without touching the project", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const stamp = Date.now();
+        const [a] = await db
+          .insert(schema.users)
+          .values({ email: `arc-a-${stamp}@example.com` })
+          .returning();
+        const [b] = await db
+          .insert(schema.users)
+          .values({ email: `arc-b-${stamp}@example.com` })
+          .returning();
+        const created = await createProject(db, a.id, { name: "Private", idea: "Mine." });
+        await expect(archiveProject(db, b.id, created.project.id)).rejects.toBeInstanceOf(
+          ProjectNotFoundError,
+        );
+        // Owner's project survives the attempt untouched.
+        const reread = await getProject(db, a.id, created.project.id);
+        expect(reread.project.id).toBe(created.project.id);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("lists owned projects most-recently-updated first, hiding foreign and archived ones", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const stamp = Date.now();
+        const [a] = await db
+          .insert(schema.users)
+          .values({ email: `lst-a-${stamp}@example.com` })
+          .returning();
+        const [b] = await db
+          .insert(schema.users)
+          .values({ email: `lst-b-${stamp}@example.com` })
+          .returning();
+        const first = await createProject(db, a.id, { name: "First", idea: "one" });
+        const second = await createProject(db, a.id, { name: "Second", idea: "two" });
+        await createProject(db, b.id, { name: "Foreign", idea: "not mine" });
+        // Touch the older project: updated_at bumps via $onUpdate, so it
+        // must surface first regardless of creation order.
+        await updateProject(db, a.id, first.project.id, { description: "touched" });
+        await archiveProject(db, a.id, second.project.id);
+
+        const listed = await listProjects(db, a.id);
+        expect(listed.map((project) => project.name)).toEqual(["First"]);
+        expect(listed[0].description).toBe("touched");
+
+        const foreign = await listProjects(db, b.id);
+        expect(foreign.map((project) => project.name)).toEqual(["Foreign"]);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("orders the list by recency", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `ord-${Date.now()}@example.com` })
+          .returning();
+        const older = await createProject(db, owner.id, { name: "Older", idea: "one" });
+        // Strictly later UPDATE: its updated_at is taken at a later
+        // wall-clock time than both inserts, so ties are impossible.
+        await updateProject(db, owner.id, older.project.id, { description: "bump" });
+        await createProject(db, owner.id, { name: "Newer", idea: "two" });
+
+        const listed = await listProjects(db, owner.id);
+        expect(listed.map((project) => project.name)).toEqual(["Newer", "Older"]);
       });
     } finally {
       await pool.end();

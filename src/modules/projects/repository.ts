@@ -1,9 +1,10 @@
-// Project persistence (TASK-011).
+// Project persistence (TASK-011) + centralized authorization (TASK-014).
 //
 // Every query carries (id, user_id) plus deleted_at IS NULL: cross-user
 // access fails at the WHERE clause, not in a later check, so forgetting a
-// caller-side comparison is harmless. Update/delete go through getProject
-// first and refuse to touch lifecycle_state, discovery_level,
+// caller-side comparison is harmless. The ownership RULE itself lives in
+// authorization.ts — getProject asserts it on every loaded row as a backstop.
+// Update/delete go through getProject first and refuse to touch lifecycle_state, discovery_level,
 // readiness_score, state_version, user_id — those columns belong to
 // TASK-020 / readiness, never to a generic update.
 //
@@ -11,9 +12,10 @@
 // synchronous and TASK-020's version-row write doesn't exist yet, so there is
 // no second write to roll back. Keep the transaction out until a task adds
 // a genuine second write (transaction boundaries: AGENTS.md §51).
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
 import { projectInputs, projects, projectSettings } from "../../infrastructure/database/schema";
+import { assertProjectOwnership } from "./authorization";
 import { ProjectNotFoundError, ProjectValidationError } from "./errors";
 import { deriveSlug } from "./slugs";
 
@@ -205,6 +207,10 @@ export async function getProject(
     where: and(eq(projects.id, projectId), eq(projects.userId, userId), isNull(projects.deletedAt)),
   })) as ProjectRow | undefined;
   if (!project) throw new ProjectNotFoundError();
+  // Central policy (TASK-014): the WHERE clause above is the primary
+  // enforcement, this assert is the semantic backstop — it denies a row
+  // whose owner differs even if a future refactor drops the SQL scoping.
+  assertProjectOwnership(project.userId, userId);
   const input = (await db.query.projectInputs.findFirst({
     where: eq(projectInputs.projectId, projectId),
   })) as unknown as ProjectInputRow | undefined;
@@ -212,6 +218,18 @@ export async function getProject(
     where: eq(projectSettings.projectId, projectId),
   })) as unknown as ProjectSettingsRow | undefined;
   return toDetail(project, input ?? null, settings ?? null);
+}
+
+// Project list for SCREEN-003 (TASK-012): owned, non-archived projects only,
+// most recently updated first. Returns lean rows — no input/settings joins
+// (AGENTS.md §91): the list shows name/state/readiness/updated, nothing more.
+export async function listProjects(db: AppDatabase, userId: string): Promise<ProjectRow[]> {
+  if (userId.trim() === "") throw new ProjectValidationError("Owner is required.");
+  const rows = await db.query.projects.findMany({
+    where: and(eq(projects.userId, userId), isNull(projects.deletedAt)),
+    orderBy: [desc(projects.updatedAt)],
+  });
+  return rows as ProjectRow[];
 }
 
 export interface UpdateProjectInput {
@@ -223,6 +241,42 @@ export interface UpdateProjectInput {
   references?: unknown;
   preferredStack?: string | null | undefined;
   preferredLanguage?: string | null | undefined;
+}
+
+// Scope handle for nested resources (TASK-014): decisions, knowledge, tasks,
+// and every future project child must resolve ownership through HERE and
+// carry the returned projectId into their own scoped queries — never trust
+// a client-provided project_id directly (architecture.md §51, §63).
+export interface ProjectScope {
+  projectId: string;
+  ownerId: string;
+}
+
+export async function requireProjectScope(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+): Promise<ProjectScope> {
+  const { project } = await getProject(db, userId, projectId);
+  return { projectId: project.id, ownerId: project.userId };
+}
+
+// Soft-delete per database-schema.md §63: the row stays for retention, but
+// every read path filters deleted_at IS NULL so it becomes inaccessible.
+// One atomic scoped UPDATE — missing, foreign, or already-archived rows all
+// surface as NotFound without revealing which case applied.
+export async function archiveProject(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+): Promise<void> {
+  if (userId.trim() === "") throw new ProjectValidationError("Owner is required.");
+  const [archived] = await db
+    .update(projects)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(projects.id, projectId), eq(projects.userId, userId), isNull(projects.deletedAt)))
+    .returning({ id: projects.id });
+  if (!archived) throw new ProjectNotFoundError();
 }
 
 export async function updateProject(

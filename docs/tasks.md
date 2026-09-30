@@ -216,7 +216,7 @@ Create a stable application foundation before implementing product behavior.
 
 # TASK-001 — Initialize Application Repository
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M0
 
@@ -566,7 +566,7 @@ Optional idea-capture fields should follow the schema.
 
 # TASK-012 — Implement Project List
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 
@@ -601,7 +601,7 @@ Display projects belonging to the authenticated user.
 
 # TASK-013 — Implement Project Creation Flow
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 
@@ -654,7 +654,7 @@ preferred stack
 
 # TASK-014 — Implement Project Authorization Policies
 
-**Status:** READY
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 

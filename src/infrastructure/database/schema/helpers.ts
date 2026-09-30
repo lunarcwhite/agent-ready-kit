@@ -12,6 +12,12 @@ export function uuidPrimaryKey() {
 export function timestampColumns() {
   return {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // $onUpdate is application-level (no DDL change, no migration): Drizzle
+    // stamps updated_at on every UPDATE so "last updated" in TASK-012's
+    // project list reflects real edits, not creation time.
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
   };
 }
