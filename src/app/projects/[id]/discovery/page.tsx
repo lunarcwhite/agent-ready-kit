@@ -32,6 +32,7 @@ import {
 } from "@/modules/discovery/discovery";
 import { selectNextDiscoveryTopic } from "@/modules/discovery/prioritization";
 import { generateDiscoveryQuestion } from "@/modules/discovery/interviewer";
+import { interpretAnswer } from "@/modules/discovery/answer-interpreter";
 import { calculateDiscoveryLevel } from "@/modules/discovery/level";
 import { discoveryLevelLabel, nodeStatusLabel } from "./labels";
 
@@ -53,16 +54,38 @@ async function answerAction(
   const content = String(formData.get("content") ?? "").trim();
   const nodeKey = String(formData.get("nodeKey") ?? "").trim() || undefined;
   if (content === "") redirect(`/projects/${projectId}/discovery?session=${sessionId}&error=empty`);
+  // Interpretation is evidence linked to the answer (TASK-033/TASK-053):
+  // the raw answer is always preserved, the structured reading rides along
+  // when it succeeds. Application of candidate changes belongs to TASK-054,
+  // so nothing here touches decisions or the state version.
+  let interpretation: unknown = undefined;
+  let aiOperationId: string | undefined;
+  let interpreted = true;
+  try {
+    const result = await interpretAnswer(getDb(), user.id, projectId, {
+      answer: content,
+      nodeKey,
+      sessionId,
+    });
+    interpretation = result.interpretation;
+    aiOperationId = result.operationId;
+  } catch {
+    interpreted = false;
+  }
   try {
     await appendDiscoveryMessage(getDb(), user.id, projectId, sessionId, {
       role: "USER",
       content,
       nodeKey,
+      aiOperationId,
+      interpretation,
     });
   } catch {
     redirect(`/projects/${projectId}/discovery?session=${sessionId}&error=save`);
   }
-  redirect(`/projects/${projectId}/discovery?session=${sessionId}`);
+  redirect(
+    `/projects/${projectId}/discovery?session=${sessionId}${interpreted ? "" : "&error=interpret"}`,
+  );
 }
 
 async function generateQuestionAction(
@@ -206,6 +229,15 @@ export default async function DiscoveryPage({
           className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
         >
           Couldn&apos;t generate a question. Nothing was changed — try again.
+        </p>
+      )}
+      {query.error === "interpret" && (
+        <p
+          role="alert"
+          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          Answer saved, but it couldn&apos;t be interpreted. Nothing was applied to your decisions —
+          try answering again.
         </p>
       )}
 
