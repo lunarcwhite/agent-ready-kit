@@ -16,3 +16,4 @@ export * from "./validation";
 export * from "./user-tasks";
 export * from "./jobs";
 export * from "./specifications";
+export * from "./entities";

@@ -16,6 +16,7 @@ import {
   specificationSections,
 } from "../../infrastructure/database/schema/specifications";
 import { decisions } from "../../infrastructure/database/schema/decisions";
+import { domainEntities } from "../../infrastructure/database/schema/entities";
 import { knowledgeItems } from "../../infrastructure/database/schema/knowledge";
 import { requirements } from "../../infrastructure/database/schema/requirements";
 import { requireProjectScope } from "../projects/repository";
@@ -96,23 +97,28 @@ interface ValidatedRef {
   sourceId: string;
 }
 
-// Strict same-project existence for row-backed types. ENTITY rows live in a
-// future domain_entities table (TASK-064 area) — until then ENTITY refs are
-// structural (valid UUID) so compilers can declare them without fabricating
-// validation. Missing and foreign rows surface identically as validation
-// errors, never revealing other projects.
+// Strict same-project existence for row-backed types. Missing and
+// foreign rows surface identically as validation errors, never revealing
+// other projects.
 async function assertRefInScope(
   db: AppDatabase,
   projectId: string,
   ref: ValidatedRef,
   field: string,
 ): Promise<void> {
-  if (ref.sourceType === "ENTITY") return;
   const missing = (): never => {
     throw new SpecificationValidationError(
       `${field}: ${ref.sourceType} source not found in this project.`,
     );
   };
+  if (ref.sourceType === "ENTITY") {
+    const found = await db.query.domainEntities.findFirst({
+      columns: { id: true },
+      where: and(eq(domainEntities.projectId, projectId), eq(domainEntities.id, ref.sourceId)),
+    });
+    if (!found) missing();
+    return;
+  }
   if (ref.sourceType === "DECISION") {
     const found = await db.query.decisions.findFirst({
       columns: { id: true },
