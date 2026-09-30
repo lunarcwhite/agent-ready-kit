@@ -12,6 +12,7 @@
 // touch directly.
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
+import { isUniqueViolationError } from "../../infrastructure/database/errors";
 import { allocateStableIdTx } from "../../infrastructure/database/identifiers";
 import { decisions, decisionHistory } from "../../infrastructure/database/schema/decisions";
 import { normalizeCategory } from "../../shared/identifiers";
@@ -196,16 +197,8 @@ async function insertHistorySnapshot(
   });
 }
 
-// Unique violations surface as driver errors (pg 23505, possibly wrapped by
-// drizzle layers). Unwrap the cause chain and report them as domain errors:
-// the caller learns the key is taken, never driver internals.
-function isUniqueViolation(error: unknown, depth = 0): boolean {
-  if (depth > 3 || typeof error !== "object" || error === null) return false;
-  if ((error as { code?: unknown }).code === "23505") return true;
-  return "cause" in error
-    ? isUniqueViolation((error as { cause?: unknown }).cause, depth + 1)
-    : false;
-}
+// Unique-violation mapping lives centrally (infrastructure/database/errors.ts)
+// so domain code never sniffs drivers.
 
 export async function createDecision(
   db: AppDatabase,
@@ -250,7 +243,7 @@ export async function createDecision(
         })
         .returning();
     } catch (error) {
-      if (isUniqueViolation(error)) {
+      if (isUniqueViolationError(error)) {
         throw new DecisionValidationError(
           `Decision "${decisionKey}" already exists in this project.`,
         );

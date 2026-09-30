@@ -856,7 +856,7 @@ source
 
 # TASK-024 — Implement Traceability Links
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M2
 

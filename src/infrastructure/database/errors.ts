@@ -22,3 +22,15 @@ export function toDatabaseError(category: DatabaseErrorCategory, cause: unknown)
     cause,
   });
 }
+
+// True when the cause chain bottoms out at a PostgreSQL unique violation
+// (23505), however deeply drizzle wraps it. Shared by domain modules that
+// map duplicate inserts to friendly validation errors instead of leaking
+// driver internals.
+export function isUniqueViolationError(error: unknown, depth = 0): boolean {
+  if (depth > 3 || typeof error !== "object" || error === null) return false;
+  if ((error as { code?: unknown }).code === "23505") return true;
+  return "cause" in error
+    ? isUniqueViolationError((error as { cause?: unknown }).cause, depth + 1)
+    : false;
+}

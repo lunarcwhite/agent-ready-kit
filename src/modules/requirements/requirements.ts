@@ -14,6 +14,7 @@
 // supersede without a successor is an orphan by definition.
 import { and, asc, eq } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
+import { isUniqueViolationError } from "../../infrastructure/database/errors";
 import { allocateStableIdTx } from "../../infrastructure/database/identifiers";
 import { requirements } from "../../infrastructure/database/schema/requirements";
 import { requireProjectScope } from "../projects/repository";
@@ -207,17 +208,6 @@ async function loadScoped(
   return toRow(found);
 }
 
-// Unique violations surface as driver errors (pg 23505, possibly wrapped by
-// drizzle layers). Mirrors decisions.ts — kept local so this module never
-// depends on a sibling domain for an infrastructure concern.
-function isUniqueViolation(error: unknown, depth = 0): boolean {
-  if (depth > 3 || typeof error !== "object" || error === null) return false;
-  if ((error as { code?: unknown }).code === "23505") return true;
-  return "cause" in error
-    ? isUniqueViolation((error as { cause?: unknown }).cause, depth + 1)
-    : false;
-}
-
 export async function createRequirement(
   db: AppDatabase,
   userId: string,
@@ -256,7 +246,7 @@ export async function createRequirement(
         })
         .returning();
     } catch (error) {
-      if (isUniqueViolation(error)) {
+      if (isUniqueViolationError(error)) {
         // Counter race backstop — the allocator owns uniqueness; a clash
         // here means concurrent writers, safe to surface plainly.
         throw new RequirementValidationError("Requirement code clash, retry the operation.");

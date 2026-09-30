@@ -7,3 +7,4 @@ export * from "./auth";
 export * from "./projects";
 export * from "./decisions";
 export * from "./requirements";
+export * from "./traceability";
