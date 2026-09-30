@@ -1369,7 +1369,7 @@ return structured result
 
 # TASK-046 — Implement AI Usage Guardrails
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
