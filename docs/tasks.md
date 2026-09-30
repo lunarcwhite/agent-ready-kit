@@ -1976,7 +1976,7 @@ FR-042
 
 # TASK-065 — Implement Design Specification Compiler
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
