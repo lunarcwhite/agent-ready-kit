@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { IdentifierError } from "../../shared/identifiers";
-import { allocateStableId } from "./identifiers";
+import { allocateStableId, allocateStableIdTx } from "./identifiers";
+import { DatabaseError } from "./errors";
+import * as schema from "./schema";
 import { getIntegrationDatabaseUrl, withRolledBackTransaction } from "./test-utils";
 import type { Pool } from "pg";
 import { Pool as PgPool } from "pg";
@@ -72,6 +75,41 @@ describeDb("stable identifier allocation (integration)", () => {
         expect(await allocateStableId(client, projectId, "FR")).toBe("FR-001");
       });
     } finally {
+      await pool.end();
+    }
+  });
+
+  it("shares the counter with the raw allocator through drizzle handles", async () => {
+    const pool = new PgPool({ connectionString: url as string });
+    const projectId = randomUUID();
+    try {
+      const db = drizzle(pool, { schema });
+      expect(await allocateStableIdTx(db, projectId, "FR")).toBe("FR-001");
+      // Same counter row, visible to the raw allocator.
+      expect(await allocateStableId(pool as unknown as Pool, projectId, "FR")).toBe("FR-002");
+      expect(await allocateStableIdTx(db, projectId, "FR")).toBe("FR-003");
+      await expect(allocateStableIdTx(db, "   ", "FR")).rejects.toBeInstanceOf(DatabaseError);
+    } finally {
+      await pool.query("DELETE FROM project_counters WHERE project_id = $1", [projectId]);
+      await pool.end();
+    }
+  });
+
+  it("rolls the allocation back with its transaction (no gaps)", async () => {
+    const pool = new PgPool({ connectionString: url as string });
+    const projectId = randomUUID();
+    try {
+      const db = drizzle(pool, { schema });
+      await expect(
+        db.transaction(async (tx) => {
+          expect(await allocateStableIdTx(tx, projectId, "TASK")).toBe("TASK-001");
+          throw new Error("boom");
+        }),
+      ).rejects.toThrow("boom");
+      // Rolled-back allocation left no trace: the sequence restarts at 1.
+      expect(await allocateStableIdTx(db, projectId, "TASK")).toBe("TASK-001");
+    } finally {
+      await pool.query("DELETE FROM project_counters WHERE project_id = $1", [projectId]);
       await pool.end();
     }
   });

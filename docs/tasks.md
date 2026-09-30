@@ -723,7 +723,7 @@ Each accepted meaningful state change increments or creates a project-state vers
 
 # TASK-021 — Implement Decision Domain Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M2
 
