@@ -1909,7 +1909,7 @@ export `README.md` that orients coding agents.
 
 # TASK-063 — Implement Architecture Specification Compiler
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
