@@ -814,7 +814,7 @@ invoice.strategy
 
 # TASK-023 — Implement Requirement Domain Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M2
 
