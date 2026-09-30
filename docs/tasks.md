@@ -1514,7 +1514,7 @@ Allow user to review what the Idea Analyst understood.
 
 # TASK-052 — Implement Discovery Interviewer
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M5
 
