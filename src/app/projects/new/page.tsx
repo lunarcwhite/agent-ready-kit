@@ -32,7 +32,7 @@ async function createProjectAction(formData: FormData): Promise<void> {
     .map((line) => line.trim())
     .filter((line) => line !== "");
   try {
-    await createProject(getDb(), user.id, {
+    const created = await createProject(getDb(), user.id, {
       name,
       idea,
       targetUsers: optional(formData.get("targetUsers")),
@@ -41,6 +41,7 @@ async function createProjectAction(formData: FormData): Promise<void> {
       preferredStack: optional(formData.get("preferredStack")),
       preferredLanguage: optional(formData.get("preferredLanguage")),
     });
+    redirect(`/projects/${created.project.id}/understanding`);
   } catch (error) {
     if (error instanceof ProjectValidationError) redirect("/projects/new?error=invalid");
     throw error;
