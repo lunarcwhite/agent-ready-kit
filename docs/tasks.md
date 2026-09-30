@@ -1589,7 +1589,7 @@ Translate natural-language discovery answers into structured candidate changes.
 
 # TASK-054 — Implement Candidate Change Review & Application
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M5
 

@@ -99,6 +99,8 @@ export interface UpdateDecisionInput {
   rationale?: string | null;
   status?: DecisionStatus;
   impact?: DecisionImpact;
+  sourceType?: DecisionSourceType;
+  confidence?: DecisionConfidence;
   changeReason?: string | null;
 }
 
@@ -433,6 +435,13 @@ export async function updateDecision(
   const key = requireKey(decisionKey);
   if (raw.status !== undefined) requireEnum(raw.status, DECISION_STATUSES, "status");
   if (raw.impact !== undefined) requireEnum(raw.impact, DECISION_IMPACTS, "impact");
+  // Source upgrades ride explicit re-confirmation (TASK-054): a RECOMMENDED
+  // decision the user now states explicitly becomes USER/EXPLICIT instead of
+  // keeping a stale AI origin. History snapshots the new pair, so the
+  // upgrade itself stays auditable.
+  if (raw.sourceType !== undefined)
+    requireEnum(raw.sourceType, DECISION_SOURCE_TYPES, "sourceType");
+  if (raw.confidence !== undefined) requireEnum(raw.confidence, DECISION_CONFIDENCES, "confidence");
   if (raw.value !== undefined) requireJsonSafe(raw.value, "value");
   const rationale =
     raw.rationale === undefined
@@ -446,7 +455,9 @@ export async function updateDecision(
     raw.value !== undefined ||
     rationale !== undefined ||
     raw.status !== undefined ||
-    raw.impact !== undefined;
+    raw.impact !== undefined ||
+    raw.sourceType !== undefined ||
+    raw.confidence !== undefined;
 
   const current = await loadScoped(db, userId, projectId, key);
   if (!touches) return current;
@@ -468,6 +479,8 @@ export async function updateDecision(
         ...(rationale !== undefined ? { rationale } : {}),
         ...(raw.status !== undefined ? { status: raw.status } : {}),
         ...(raw.impact !== undefined ? { impact: raw.impact } : {}),
+        ...(raw.sourceType !== undefined ? { sourceType: raw.sourceType } : {}),
+        ...(raw.confidence !== undefined ? { confidence: raw.confidence } : {}),
         version: nextVersion,
         confirmedAt,
       })

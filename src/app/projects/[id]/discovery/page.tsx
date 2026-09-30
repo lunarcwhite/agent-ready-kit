@@ -33,6 +33,7 @@ import {
 import { selectNextDiscoveryTopic } from "@/modules/discovery/prioritization";
 import { generateDiscoveryQuestion } from "@/modules/discovery/interviewer";
 import { interpretAnswer } from "@/modules/discovery/answer-interpreter";
+import { applyInterpretation } from "@/modules/discovery/candidate-application";
 import { calculateDiscoveryLevel } from "@/modules/discovery/level";
 import { discoveryLevelLabel, nodeStatusLabel } from "./labels";
 
@@ -56,11 +57,13 @@ async function answerAction(
   if (content === "") redirect(`/projects/${projectId}/discovery?session=${sessionId}&error=empty`);
   // Interpretation is evidence linked to the answer (TASK-033/TASK-053):
   // the raw answer is always preserved, the structured reading rides along
-  // when it succeeds. Application of candidate changes belongs to TASK-054,
-  // so nothing here touches decisions or the state version.
+  // when it succeeds. Validated candidates are then applied to canonical
+  // decisions (TASK-054: explicit→confirmed, inferred→recommended); the
+  // answer and its evidence survive even when application fails.
   let interpretation: unknown = undefined;
   let aiOperationId: string | undefined;
   let interpreted = true;
+  let applied = true;
   try {
     const result = await interpretAnswer(getDb(), user.id, projectId, {
       answer: content,
@@ -69,8 +72,14 @@ async function answerAction(
     });
     interpretation = result.interpretation;
     aiOperationId = result.operationId;
+    try {
+      await applyInterpretation(getDb(), user.id, projectId, result.interpretation);
+    } catch {
+      applied = false;
+    }
   } catch {
     interpreted = false;
+    applied = false;
   }
   try {
     await appendDiscoveryMessage(getDb(), user.id, projectId, sessionId, {
@@ -83,9 +92,8 @@ async function answerAction(
   } catch {
     redirect(`/projects/${projectId}/discovery?session=${sessionId}&error=save`);
   }
-  redirect(
-    `/projects/${projectId}/discovery?session=${sessionId}${interpreted ? "" : "&error=interpret"}`,
-  );
+  const errorSuffix = !interpreted ? "&error=interpret" : !applied ? "&error=apply" : "";
+  redirect(`/projects/${projectId}/discovery?session=${sessionId}${errorSuffix}`);
 }
 
 async function generateQuestionAction(
@@ -238,6 +246,15 @@ export default async function DiscoveryPage({
         >
           Answer saved, but it couldn&apos;t be interpreted. Nothing was applied to your decisions —
           try answering again.
+        </p>
+      )}
+      {query.error === "apply" && (
+        <p
+          role="alert"
+          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          Answer saved and understood, but the decisions couldn&apos;t be applied. Your previous
+          decisions are unchanged — try answering again.
         </p>
       )}
 
