@@ -57,6 +57,34 @@
       "when": 1790740666162,
       "tag": "0007_traceability",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": 7,
+      "when": 1790741000000,
+      "tag": "0008_discovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": 7,
+      "when": 1790742000000,
+      "tag": "0009_discovery_conversation",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": 7,
+      "when": 1790743000000,
+      "tag": "0010_ai_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": 7,
+      "when": 1790796000000,
+      "tag": "0011_knowledge",
+      "breakpoints": true
     }
   ]
 }

@@ -8,3 +8,6 @@ export * from "./projects";
 export * from "./decisions";
 export * from "./requirements";
 export * from "./traceability";
+export * from "./discovery";
+export * from "./ai-operations";
+export * from "./knowledge";
