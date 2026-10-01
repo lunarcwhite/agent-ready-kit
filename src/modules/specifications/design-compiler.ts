@@ -58,6 +58,7 @@ import { KnowledgeNotFoundError } from "../knowledge/errors";
 import { listScreens, type ScreenRow } from "../architecture/screens";
 import { ensureDocument, upsertSection, type SpecificationSectionRow } from "./documents";
 import { setSectionDependencies } from "./dependencies";
+import { assertSectionsInScope, normalizeSectionScope } from "./scope";
 import { SpecificationValidationError } from "./errors";
 
 export const DESIGN_COMPILER_CAPABILITY = "design-compilation" as const;
@@ -85,6 +86,7 @@ export interface CompileDesignDeps {
   promptVersion?: string;
   model?: string;
   timeoutMs?: number;
+  onlySectionKeys?: string[];
 }
 
 export interface CompileDesignResult {
@@ -129,8 +131,10 @@ function buildTaskInput(
   requirements: RequirementRow[],
   knowledge: KnowledgeItemRow[],
   screens: ScreenRow[],
+  scope: string[] | null,
 ): string {
   return JSON.stringify({
+    scope,
     requirements: requirements.map((requirement) => ({
       code: requirement.requirementCode,
       type: requirement.type,
@@ -298,6 +302,15 @@ export async function compileDesign(
   const detail = await getProject(db, userId, projectId);
   const pid = detail.project.id;
   const versionBefore = await getStateVersion(db, userId, pid);
+  let scope: string[] | null = null;
+  try {
+    scope = normalizeSectionScope(deps.onlySectionKeys);
+  } catch (error) {
+    if (error instanceof SpecificationValidationError) {
+      throw new DesignCompilerError("VALIDATION", "pending", error.message);
+    }
+    throw error;
+  }
 
   const [allRequirements, knowledge, allScreens] = await Promise.all([
     listRequirements(db, userId, pid),
@@ -327,7 +340,7 @@ export async function compileDesign(
         promptVersion: deps.promptVersion,
         model: deps.model,
         timeoutMs: deps.timeoutMs,
-        taskInput: buildTaskInput(live, knowledge, liveScreens),
+        taskInput: buildTaskInput(live, knowledge, liveScreens, scope),
         schema: DESIGN_COMPILATION_SCHEMA,
       },
       { provider: deps.provider, prompts, env: deps.env, cache: deps.cache },
@@ -356,6 +369,13 @@ export async function compileDesign(
     }
     throw error;
   }
+  assertSectionsInScope(
+    validated.sections.map((section) => section.key),
+    scope,
+    (message) => {
+      throw new DesignCompilerError("VALIDATION", orchestrated.operationId, message);
+    },
+  );
 
   await ensureDocument(db, userId, pid, DESIGN_DOCUMENT_TYPE);
   const sections: SpecificationSectionRow[] = [];

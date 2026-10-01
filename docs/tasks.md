@@ -893,7 +893,7 @@ FR → TASK
 
 # TASK-025 — Implement Provenance Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M2
 
@@ -956,7 +956,7 @@ Transform project creation into adaptive structured discovery.
 
 # TASK-030 — Implement Discovery Domain Model
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M3
 
@@ -999,7 +999,7 @@ Non-Functional
 
 # TASK-031 — Implement Discovery Level Calculation
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M3
 
@@ -1033,7 +1033,7 @@ AGENT_READY
 
 # TASK-032 — Implement Discovery Topic Prioritization
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M3
 
@@ -1069,7 +1069,7 @@ MVP relevance
 
 # TASK-033 — Implement Discovery Conversation Persistence
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M3
 
@@ -1096,7 +1096,7 @@ Persist discovery questions, answers, and their relationship to structured inter
 
 # TASK-034 — Implement Discovery Workspace UI
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M3
 
@@ -1143,7 +1143,7 @@ Provide safe, observable, provider-neutral AI execution.
 
 # TASK-040 — Implement AI Provider Abstraction
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
@@ -1177,7 +1177,7 @@ Create provider-neutral interfaces for model execution.
 
 # TASK-041 — Implement Prompt Registry
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
@@ -1216,7 +1216,7 @@ quality criteria
 
 # TASK-042 — Implement Structured Output Validation
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
@@ -1242,7 +1242,7 @@ Validate state-changing AI responses against strict schemas.
 
 # TASK-043 — Implement AI Operation Ledger
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
@@ -1288,7 +1288,7 @@ failure metadata
 
 # TASK-044 — Implement Context Builder
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
@@ -1324,7 +1324,7 @@ Optional
 
 # TASK-045 — Implement AI Orchestrator
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M4
 
@@ -2011,7 +2011,7 @@ FR-043
 
 # TASK-066 — Implement Optional Product Agent Specification Compiler
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P1
 **Milestone:** M6
 
@@ -2045,7 +2045,7 @@ Generate exported `agents.md` only for target applications that contain meaningf
 
 # TASK-067 — Implement Optional Soul Compiler
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P1
 **Milestone:** M6
 
@@ -2075,7 +2075,7 @@ FR-045
 
 # TASK-068 — Implement Specification Workspace UI
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 
@@ -2114,7 +2114,7 @@ design.md
 
 # TASK-069 — Implement Incremental Specification Regeneration
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P1
 **Milestone:** M6
 
@@ -2185,7 +2185,7 @@ INFO
 
 # TASK-071 — Implement Deterministic Completeness Validator
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M7
 
@@ -2227,7 +2227,7 @@ entity referenced but undefined
 
 # TASK-072 — Implement Deterministic Dependency Validator
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M7
 
@@ -2256,7 +2256,7 @@ FR-062
 
 # TASK-073 — Implement Semantic Validator
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M7
 
@@ -2292,7 +2292,7 @@ Detect meaningful semantic contradictions.
 
 # TASK-074 — Implement Assumption Domain Model
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M7
 
@@ -2320,7 +2320,7 @@ Track implementation-relevant assumptions separately from confirmed knowledge.
 
 # TASK-075 — Implement Assumption Analyzer
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M7
 
@@ -2351,7 +2351,7 @@ FR-064
 
 # TASK-076 — Implement Requirement Coverage Validator
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M7
 
@@ -2388,7 +2388,7 @@ Task coverage becomes active after M9.
 
 # TASK-077 — Implement Validation Workspace UI
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M7
 
@@ -2432,7 +2432,7 @@ Calculate an explainable implementation-readiness state.
 
 # TASK-080 — Define Readiness Rule Registry
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M8
 
@@ -2470,7 +2470,7 @@ Execution
 
 # TASK-081 — Implement Readiness Engine
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M8
 
@@ -2659,7 +2659,7 @@ definition of done
 
 # TASK-091 — Implement Milestone Domain Model
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M9
 
@@ -2680,7 +2680,7 @@ TASK-090
 
 # TASK-092 — Implement Task Planner Agent
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M9
 
@@ -2723,7 +2723,7 @@ Generate implementation-ready milestone/task candidates.
 
 # TASK-093 — Implement Task Dependency Validator
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M9
 
@@ -2746,7 +2746,7 @@ TASK-092
 
 # TASK-094 — Extend Requirement Coverage to Tasks
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M9
 
@@ -2772,7 +2772,7 @@ Ensure implementation tasks cover mandatory requirements.
 
 # TASK-095 — Implement Task Plan Workspace
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M9
 
@@ -2815,7 +2815,7 @@ Package approved project understanding into a coding-agent-ready workspace.
 
 # TASK-100 — Implement Context Compiler
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M10
 
@@ -2865,7 +2865,7 @@ source-of-truth locations
 
 # TASK-101 — Implement Coding Agent Instruction Compiler
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M10
 
@@ -2913,7 +2913,7 @@ completion rules
 
 # TASK-102 — Implement Markdown Renderer
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M10
 
@@ -2941,7 +2941,7 @@ Render approved specification state into exportable Markdown.
 
 # TASK-103 — Implement Agent Kit Manifest
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M10
 
@@ -2988,7 +2988,7 @@ target adapter
 
 # TASK-104 — Implement Generic Agent Kit Compiler
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M10
 
@@ -3040,7 +3040,7 @@ Optional files are omitted when not applicable.
 
 # TASK-105 — Implement ZIP Export
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P0
 **Milestone:** M10
 
@@ -3069,7 +3069,7 @@ FR-122
 
 # TASK-106 — Implement Agent Target Adapter Interface
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P1
 **Milestone:** M10
 
@@ -3108,7 +3108,7 @@ Vendor adapters may initially perform only small instruction/file-layout adaptat
 
 # TASK-107 — Implement Export History
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P1
 **Milestone:** M10
 
@@ -3201,7 +3201,7 @@ design.md
 
 # TASK-112 — Implement Specification Change Review
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P1
 **Milestone:** M11
 
@@ -3238,7 +3238,7 @@ Allow users to review downstream specification changes caused by changed canonic
 
 # TASK-113 — Implement Basic Change Impact Service
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P1
 **Milestone:** M11
 
@@ -3305,7 +3305,7 @@ design.md
 
 # TASK-115 — Implement Global Loading & AI Operation States
 
-**Status:** BLOCKED
+**Status:** REVIEW_REQUIRED
 **Priority:** P1
 **Milestone:** M11
 
@@ -3432,7 +3432,7 @@ Persist background-job state for long-running AI operations
 
 # TASK-132 — Implement Proposed-Change Lifecycle
 
-**Status:** BLOCKED
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M6
 

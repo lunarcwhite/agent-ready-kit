@@ -34,6 +34,8 @@ describe("stable identifier formatting", () => {
     expect(formatStableId("ENT", 6)).toBe("ENT-006");
     expect(formatStableId("ARC", 8)).toBe("ARC-008");
     expect(formatStableId("SCREEN", 9)).toBe("SCREEN-009");
+    expect(formatStableId("MS", 1)).toBe("MS-001");
+    expect(formatStableId("UTASK", 7)).toBe("UTASK-007");
   });
 
   it("formats DEC codes with a category infix", () => {

@@ -31,18 +31,21 @@
 //
 // There is deliberately NO delete API: removed tasks freeze in place so
 // stable IDs are never reused (DB-INV-004) and dependency history stays
-// queryable. Milestone moves are plain label edits (TASK-091 owns the
-// milestone model).
+// queryable. Milestone membership is the milestone_id FK (TASK-091):
+// moves are validated same-project links that keep the stable task code,
+// and milestone display order never feeds dependency derivation.
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
 import { isUniqueViolationError } from "../../infrastructure/database/errors";
 import { allocateStableIdTx } from "../../infrastructure/database/identifiers";
+import { milestones } from "../../infrastructure/database/schema/milestones";
 import { requirements } from "../../infrastructure/database/schema/requirements";
 import { userTasks } from "../../infrastructure/database/schema/user-tasks";
 import { parseStableId } from "../../shared/identifiers";
 import { requireProjectScope } from "../projects/repository";
 import { incrementStateVersion } from "../projects/state-version";
 import { UserTaskNotFoundError, UserTaskValidationError } from "./errors";
+import { refreshDerivedReadinessTx } from "./dependencies";
 
 export const USER_TASK_STATUSES = [
   "PENDING",
@@ -81,7 +84,7 @@ export interface UserTaskRow {
   objective: string;
   status: UserTaskStatus;
   priority: UserTaskPriority;
-  milestone: string | null;
+  milestoneId: string | null;
   implementationNotes: string | null;
   acceptanceCriteria: string[];
   definitionOfDone: string[];
@@ -96,7 +99,7 @@ export interface CreateUserTaskInput {
   objective: string;
   priority: UserTaskPriority;
   status?: UserTaskStatus;
-  milestone?: string | null;
+  milestoneId?: string | null;
   implementationNotes?: string | null;
   acceptanceCriteria: string[];
   definitionOfDone: string[];
@@ -109,7 +112,7 @@ export interface UpdateUserTaskInput {
   objective?: string;
   priority?: UserTaskPriority;
   status?: UserTaskStatus;
-  milestone?: string | null;
+  milestoneId?: string | null;
   implementationNotes?: string | null;
   acceptanceCriteria?: string[];
   definitionOfDone?: string[];
@@ -120,13 +123,12 @@ export interface UpdateUserTaskInput {
 export interface ListUserTasksFilter {
   status?: UserTaskStatus;
   priority?: UserTaskPriority;
-  milestone?: string;
+  milestoneId?: string;
 }
 
 const MAX_TITLE_LENGTH = 255;
 const MAX_OBJECTIVE_LENGTH = 20000;
 const MAX_NOTES_LENGTH = 20000;
-const MAX_MILESTONE_LENGTH = 64;
 const MAX_REF_LENGTH = 128;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -274,7 +276,7 @@ function toRow(raw: typeof userTasks.$inferSelect): UserTaskRow {
     objective: raw.objective,
     status: raw.status as UserTaskStatus,
     priority: raw.priority as UserTaskPriority,
-    milestone: raw.milestone,
+    milestoneId: raw.milestoneId,
     implementationNotes: raw.implementationNotes,
     acceptanceCriteria: (raw.acceptanceCriteria ?? []) as string[],
     definitionOfDone: (raw.definitionOfDone ?? []) as string[],
@@ -283,6 +285,35 @@ function toRow(raw: typeof userTasks.$inferSelect): UserTaskRow {
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
+}
+
+// Milestone links are row UUIDs validated same-project (TASK-091):
+// shape-checked before any write, existence-checked inside the caller's
+// transaction. Missing and foreign milestones surface identically as
+// NotFound — the domain never reveals whether another user's milestone
+// exists (TASK-014).
+function requireMilestoneShape(raw: string | null | undefined): string | null {
+  if (raw === undefined || raw === null) return null;
+  const id = raw.trim();
+  if (!UUID_PATTERN.test(id)) {
+    throw new UserTaskValidationError("milestoneId must be a UUID.");
+  }
+  return id;
+}
+
+async function assertMilestoneInScope(
+  db: AppDatabase,
+  projectId: string,
+  milestoneId: string | null,
+): Promise<string | null> {
+  if (milestoneId === null) return null;
+  const rows = await db
+    .select({ id: milestones.id })
+    .from(milestones)
+    .where(and(eq(milestones.projectId, projectId), eq(milestones.id, milestoneId)))
+    .limit(1);
+  if (rows.length === 0) throw new UserTaskNotFoundError("Milestone not found.");
+  return milestoneId;
 }
 
 // Strict same-project check for REQUIREMENT refs. Missing rows and foreign
@@ -334,7 +365,7 @@ export async function createUserTask(
   const priority = requireEnum(raw.priority, USER_TASK_PRIORITIES, "priority");
   const status =
     raw.status === undefined ? "PENDING" : requireEnum(raw.status, USER_TASK_STATUSES, "status");
-  const milestone = optionalText(raw.milestone ?? null, "milestone", MAX_MILESTONE_LENGTH) ?? null;
+  const milestoneShape = requireMilestoneShape(raw.milestoneId ?? null);
   const implementationNotes =
     optionalText(raw.implementationNotes ?? null, "implementationNotes", MAX_NOTES_LENGTH) ?? null;
   const acceptanceCriteria = requireStringList(raw.acceptanceCriteria, "acceptanceCriteria");
@@ -351,6 +382,7 @@ export async function createUserTask(
   return db.transaction(async (tx) => {
     const scope = await requireProjectScope(tx, userId, projectId);
     await assertRequirementRefsInScope(tx, scope.projectId, references);
+    const milestoneId = await assertMilestoneInScope(tx, scope.projectId, milestoneShape);
     const taskCode = await allocateStableIdTx(tx, scope.projectId, "UTASK");
     let inserted: typeof userTasks.$inferSelect | undefined;
     try {
@@ -363,7 +395,7 @@ export async function createUserTask(
           objective,
           status,
           priority,
-          milestone,
+          milestoneId,
           implementationNotes,
           acceptanceCriteria,
           definitionOfDone,
@@ -412,10 +444,12 @@ export async function listUserTasks(
   const conditions = [eq(userTasks.projectId, scope.projectId)];
   if (filter?.status !== undefined) conditions.push(eq(userTasks.status, filter.status));
   if (filter?.priority !== undefined) conditions.push(eq(userTasks.priority, filter.priority));
-  if (filter?.milestone !== undefined) {
-    const milestone = filter.milestone.trim();
-    if (milestone === "") throw new UserTaskValidationError("milestone filter must be non-empty.");
-    conditions.push(eq(userTasks.milestone, milestone));
+  if (filter?.milestoneId !== undefined) {
+    const milestoneId = requireMilestoneShape(filter.milestoneId);
+    if (milestoneId === null || milestoneId === undefined) {
+      throw new UserTaskValidationError("milestoneId filter must be a UUID.");
+    }
+    conditions.push(eq(userTasks.milestoneId, milestoneId));
   }
   // Milestone ordering (TASK-091) never overrides dependency rules: sort
   // order is a display hint only — nulls sort last, ties break by code so
@@ -442,10 +476,8 @@ export async function updateUserTask(
   if (raw.objective !== undefined) requireText(raw.objective, "objective", MAX_OBJECTIVE_LENGTH);
   if (raw.priority !== undefined) requireEnum(raw.priority, USER_TASK_PRIORITIES, "priority");
   if (raw.status !== undefined) requireEnum(raw.status, USER_TASK_STATUSES, "status");
-  const milestone =
-    raw.milestone === undefined
-      ? undefined
-      : (optionalText(raw.milestone, "milestone", MAX_MILESTONE_LENGTH) ?? null);
+  const milestoneShape =
+    raw.milestoneId === undefined ? undefined : requireMilestoneShape(raw.milestoneId);
   const implementationNotes =
     raw.implementationNotes === undefined
       ? undefined
@@ -475,7 +507,7 @@ export async function updateUserTask(
     raw.objective !== undefined ||
     raw.priority !== undefined ||
     raw.status !== undefined ||
-    milestone !== undefined ||
+    milestoneShape !== undefined ||
     implementationNotes !== undefined ||
     acceptanceCriteria !== undefined ||
     definitionOfDone !== undefined ||
@@ -490,6 +522,10 @@ export async function updateUserTask(
     if (references !== undefined) {
       await assertRequirementRefsInScope(tx, scope.projectId, references);
     }
+    const milestoneId =
+      milestoneShape === undefined
+        ? undefined
+        : await assertMilestoneInScope(tx, scope.projectId, milestoneShape);
     const [updated] = await tx
       .update(userTasks)
       .set({
@@ -497,7 +533,7 @@ export async function updateUserTask(
         ...(raw.objective !== undefined ? { objective: raw.objective.trim() } : {}),
         ...(raw.priority !== undefined ? { priority: raw.priority } : {}),
         ...(raw.status !== undefined ? { status: raw.status } : {}),
-        ...(milestone !== undefined ? { milestone } : {}),
+        ...(milestoneId !== undefined ? { milestoneId } : {}),
         ...(implementationNotes !== undefined ? { implementationNotes } : {}),
         ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
         ...(definitionOfDone !== undefined ? { definitionOfDone } : {}),
@@ -508,6 +544,11 @@ export async function updateUserTask(
       .returning();
     if (!updated) throw new UserTaskNotFoundError();
     const row = toRow(updated);
+    // Status writes re-derive the band (TASK-093): marking a prerequisite
+    // DONE may unblock dependents; marking it non-DONE re-blocks them.
+    // Authoritative states (DONE/REVIEW_REQUIRED) are never overwritten —
+    // the refresh only touches PENDING/READY/BLOCKED rows.
+    await refreshDerivedReadinessTx(tx, userId, current.projectId);
     await incrementStateVersion(tx, userId, current.projectId);
     return row;
   });

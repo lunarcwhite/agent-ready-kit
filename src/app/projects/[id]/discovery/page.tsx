@@ -14,6 +14,8 @@
 // suggested options render when present — custom answers always stay
 // possible via the composer.
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
+import { OperationFailure } from "@/app/components/operation-status";
 import { getSessionUser } from "@/infrastructure/auth/identity";
 import { getDb } from "@/infrastructure/database/db";
 import { getProject } from "@/modules/projects/repository";
@@ -251,9 +253,9 @@ export default async function DiscoveryPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-8">
       <div>
-        <a href="/projects" className="text-sm text-zinc-500 hover:underline">
+        <Link href="/projects" className="text-sm text-zinc-500 hover:underline">
           ← Projects
-        </a>
+        </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Discovery</h1>
       </div>
 
@@ -274,30 +276,22 @@ export default async function DiscoveryPage({
         </p>
       )}
       {query.error === "generate" && (
-        <p
-          role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          Couldn&apos;t generate a question. Nothing was changed — try again.
-        </p>
+        <OperationFailure
+          title="Couldn't generate a question."
+          detail="Formulating the next question failed."
+        />
       )}
       {query.error === "interpret" && (
-        <p
-          role="alert"
-          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-        >
-          Answer saved, but it couldn&apos;t be interpreted. Nothing was applied to your decisions —
-          try answering again.
-        </p>
+        <OperationFailure
+          title="Answer saved, but it couldn't be interpreted."
+          detail="Understanding your answer failed — nothing was applied to your decisions."
+        />
       )}
       {query.error === "apply" && (
-        <p
-          role="alert"
-          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-        >
-          Answer saved and understood, but the decisions couldn&apos;t be applied. Your previous
-          decisions are unchanged — try answering again.
-        </p>
+        <OperationFailure
+          title="Answer saved and understood, but the decisions couldn't be applied."
+          detail="Updating project knowledge failed — your previous decisions are unchanged."
+        />
       )}
       {summaryDecisions.length > 0 && (
         <section

@@ -57,6 +57,7 @@ import { KnowledgeNotFoundError } from "../knowledge/errors";
 import { listComponents, type ComponentRow } from "../architecture/components";
 import { ensureDocument, upsertSection, type SpecificationSectionRow } from "./documents";
 import { setSectionDependencies } from "./dependencies";
+import { assertSectionsInScope, normalizeSectionScope } from "./scope";
 import { SpecificationValidationError } from "./errors";
 
 export const ARCH_COMPILER_CAPABILITY = "architecture-compilation" as const;
@@ -84,6 +85,7 @@ export interface CompileArchDeps {
   promptVersion?: string;
   model?: string;
   timeoutMs?: number;
+  onlySectionKeys?: string[];
 }
 
 export interface CompileArchResult {
@@ -131,8 +133,10 @@ function buildTaskInput(
   requirements: RequirementRow[],
   knowledge: KnowledgeItemRow[],
   components: ComponentRow[],
+  scope: string[] | null,
 ): string {
   return JSON.stringify({
+    scope,
     requirements: requirements.map((requirement) => ({
       code: requirement.requirementCode,
       type: requirement.type,
@@ -296,6 +300,15 @@ export async function compileArchitecture(
   const detail = await getProject(db, userId, projectId);
   const pid = detail.project.id;
   const versionBefore = await getStateVersion(db, userId, pid);
+  let scope: string[] | null = null;
+  try {
+    scope = normalizeSectionScope(deps.onlySectionKeys);
+  } catch (error) {
+    if (error instanceof SpecificationValidationError) {
+      throw new ArchCompilerError("VALIDATION", "pending", error.message);
+    }
+    throw error;
+  }
 
   const [allRequirements, knowledge, allComponents] = await Promise.all([
     listRequirements(db, userId, pid),
@@ -325,7 +338,7 @@ export async function compileArchitecture(
         promptVersion: deps.promptVersion,
         model: deps.model,
         timeoutMs: deps.timeoutMs,
-        taskInput: buildTaskInput(live, knowledge, liveComponents),
+        taskInput: buildTaskInput(live, knowledge, liveComponents, scope),
         schema: ARCHITECTURE_COMPILATION_SCHEMA,
       },
       { provider: deps.provider, prompts, env: deps.env, cache: deps.cache },
@@ -354,6 +367,13 @@ export async function compileArchitecture(
     }
     throw error;
   }
+  assertSectionsInScope(
+    validated.sections.map((section) => section.key),
+    scope,
+    (message) => {
+      throw new ArchCompilerError("VALIDATION", orchestrated.operationId, message);
+    },
+  );
 
   await ensureDocument(db, userId, pid, ARCH_DOCUMENT_TYPE);
   const sections: SpecificationSectionRow[] = [];

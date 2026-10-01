@@ -29,7 +29,69 @@ export interface TaskDependencyRow {
   createdAt: Date;
 }
 
-// Cycle check over the project graph plus the candidate edge: depth-first
+// READY/BLOCKED derivation (TASK-093, AGENTS.md §46): readiness is a
+// pure function of direct prerequisite states — READY iff every
+// prerequisite is DONE (vacuously true with no prerequisites), else
+// BLOCKED. Multi-level chains emerge transitively: each task derives
+// from its direct prerequisites, whose own states are derived the same
+// way. DONE and REVIEW_REQUIRED are authoritative human/execution states
+// and are never derived — only the PENDING/READY/BLOCKED band is.
+export function deriveReadiness(dependencyStatuses: readonly string[]): "READY" | "BLOCKED" {
+  return dependencyStatuses.every((status) => status === "DONE") ? "READY" : "BLOCKED";
+}
+
+// Recomputes the PENDING/READY/BLOCKED band for the whole project inside
+// the caller's transaction (no version bump here — the caller owns the
+// bump for its logical operation). Returns updated codes, sorted.
+export async function refreshDerivedReadinessTx(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+): Promise<string[]> {
+  const scope = await requireProjectScope(db, userId, projectId);
+  const tasks = await db
+    .select({ id: userTasks.id, taskCode: userTasks.taskCode, status: userTasks.status })
+    .from(userTasks)
+    .where(eq(userTasks.projectId, scope.projectId));
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const depRows = await db.select().from(userTaskDependencies);
+  const prerequisites = new Map<string, string[]>();
+  for (const row of depRows) {
+    if (!byId.has(row.taskId) || !byId.has(row.dependsOnTaskId)) continue;
+    const list = prerequisites.get(row.taskId) ?? [];
+    list.push(row.dependsOnTaskId);
+    prerequisites.set(row.taskId, list);
+  }
+  const updated: string[] = [];
+  for (const task of tasks) {
+    if (task.status !== "PENDING" && task.status !== "READY" && task.status !== "BLOCKED") {
+      continue;
+    }
+    const depStatuses = (prerequisites.get(task.id) ?? []).map((id) => byId.get(id)?.status ?? "");
+    const derived = deriveReadiness(depStatuses);
+    if (derived !== task.status) {
+      await db.update(userTasks).set({ status: derived }).where(eq(userTasks.id, task.id));
+      updated.push(task.taskCode);
+    }
+  }
+  return updated.sort();
+}
+
+// Standalone entry for explicit callers (plan workspace, tests): one
+// transaction, one version bump only when something changed.
+export async function refreshDerivedReadiness(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+): Promise<{ updated: string[] }> {
+  if (userId.trim() === "") throw new UserTaskValidationError("Owner is required.");
+  return db.transaction(async (tx) => {
+    const scope = await requireProjectScope(tx, userId, projectId);
+    const updated = await refreshDerivedReadinessTx(tx, userId, scope.projectId);
+    if (updated.length > 0) await incrementStateVersion(tx, userId, scope.projectId);
+    return { updated };
+  });
+}
 // from the candidate prerequisite — reaching the candidate dependent means
 // the new edge would close a loop. Pure: fully unit-testable without a
 // database. Mirrors wouldCreateCycle in decisions/dependencies.ts.
@@ -155,6 +217,9 @@ export async function addUserTaskDependency(
       throw error;
     }
     if (!inserted) throw new UserTaskNotFoundError("Dependency registration failed.");
+    // Derive readiness for the affected band after the edge lands
+    // (TASK-093): a new prerequisite blocks its dependent until DONE.
+    await refreshDerivedReadinessTx(tx, userId, scope.projectId);
     await incrementStateVersion(tx, userId, scope.projectId);
     return toDependencyRow(inserted, byId);
   });
@@ -189,6 +254,9 @@ export async function removeUserTaskDependency(
     const row = existing[0];
     if (!row) throw new UserTaskNotFoundError("Dependency not found.");
     await tx.delete(userTaskDependencies).where(eq(userTaskDependencies.id, row.id));
+    // Derive readiness after the edge leaves (TASK-093): removing the last
+    // incomplete prerequisite may unblock the dependent.
+    await refreshDerivedReadinessTx(tx, userId, scope.projectId);
     await incrementStateVersion(tx, userId, scope.projectId);
   });
 }

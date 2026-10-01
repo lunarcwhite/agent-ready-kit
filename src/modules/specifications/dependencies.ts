@@ -196,6 +196,70 @@ export async function listSectionDependencies(
   return rows.map((row) => ({ ...row, sourceType: row.sourceType as SectionSourceType }));
 }
 
+export interface SectionSourceRef {
+  sourceType: SectionSourceType;
+  sourceId: string;
+  /** Human reference for display: FR-001, DEC-AUTH-001, knowledge key, ENT-001. */
+  label: string;
+}
+
+// Human-readable projection of a section's dependencies (TASK-068: source
+// references must be inspectable in the workspace). Same-project rows only —
+// a dependency pointing outside the scope resolves to its bare type instead
+// of leaking another project's labels.
+export async function listSectionSources(
+  db: AppDatabase,
+  userId: string,
+  projectId: string,
+  documentType: string,
+  sectionKey: string,
+): Promise<SectionSourceRef[]> {
+  if (userId.trim() === "") throw new SpecificationValidationError("Owner is required.");
+  const scope = await requireProjectScope(db, userId, projectId);
+  const section = await getSection(db, userId, scope.projectId, documentType, sectionKey);
+  const rows = await db.query.sectionDependencies.findMany({
+    where: eq(sectionDependencies.sectionId, section.id),
+  });
+  const out: SectionSourceRef[] = [];
+  for (const row of rows) {
+    const sourceType = row.sourceType as SectionSourceType;
+    let label: string | null = null;
+    if (sourceType === "REQUIREMENT") {
+      const found = await db.query.requirements.findFirst({
+        columns: { requirementCode: true },
+        where: and(eq(requirements.projectId, scope.projectId), eq(requirements.id, row.sourceId)),
+      });
+      label = found?.requirementCode ?? null;
+    } else if (sourceType === "KNOWLEDGE") {
+      const found = await db.query.knowledgeItems.findFirst({
+        columns: { knowledgeKey: true },
+        where: and(
+          eq(knowledgeItems.projectId, scope.projectId),
+          eq(knowledgeItems.id, row.sourceId),
+        ),
+      });
+      label = found?.knowledgeKey ?? null;
+    } else if (sourceType === "DECISION") {
+      const found = await db.query.decisions.findFirst({
+        columns: { decisionCode: true },
+        where: and(eq(decisions.projectId, scope.projectId), eq(decisions.id, row.sourceId)),
+      });
+      label = found?.decisionCode ?? null;
+    } else {
+      const found = await db.query.domainEntities.findFirst({
+        columns: { entityCode: true },
+        where: and(
+          eq(domainEntities.projectId, scope.projectId),
+          eq(domainEntities.id, row.sourceId),
+        ),
+      });
+      label = found?.entityCode ?? null;
+    }
+    out.push({ sourceType, sourceId: row.sourceId, label: label ?? sourceType });
+  }
+  return out.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 // Reverse lookup: every section (document type + key) depending on a
 // canonical element, scoped to the caller's project. Powers deterministic
 // staleness propagation.

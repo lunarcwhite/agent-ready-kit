@@ -29,7 +29,7 @@
 // then human review then createVersion. Section writes are idempotent by
 // stable key, so a retry after a mid-write crash converges instead of
 // duplicating.
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
 import type { EnvLike } from "../../ai/providers/config";
 import type { AIProvider } from "../../ai/providers/types";
@@ -56,6 +56,7 @@ import { KnowledgeNotFoundError } from "../knowledge/errors";
 import { listEntityDetails, type EntityDetail } from "../entities/entities";
 import { ensureDocument, upsertSection, type SpecificationSectionRow } from "./documents";
 import { setSectionDependencies } from "./dependencies";
+import { assertSectionsInScope, normalizeSectionScope } from "./scope";
 import { SpecificationValidationError } from "./errors";
 
 export const DATA_COMPILER_CAPABILITY = "data-compilation" as const;
@@ -83,6 +84,7 @@ export interface CompileDataDeps {
   promptVersion?: string;
   model?: string;
   timeoutMs?: number;
+  onlySectionKeys?: string[];
 }
 
 export interface CompileDataResult {
@@ -128,8 +130,10 @@ function buildTaskInput(
   knowledge: KnowledgeItemRow[],
   entities: EntityDetail[],
   relationships: { sourceCode: string; targetCode: string; relationshipType: string }[],
+  scope: string[] | null,
 ): string {
   return JSON.stringify({
+    scope,
     requirements: requirements.map((requirement) => ({
       code: requirement.requirementCode,
       type: requirement.type,
@@ -261,8 +265,12 @@ async function validateCompilation(
       if (!(LIVE_ENTITY_STATUSES as readonly string[]).includes(found.status)) {
         fail(`sections[${index}].entityCodes[${i}]: "${code}" is not live.`);
       }
+      // Name-ordered like the entities module's own loader: compiled
+      // output must be deterministic for the same canonical state, or
+      // dependency hashes and regeneration comparisons churn on row order.
       const attrs = await db.query.entityAttributes.findMany({
         where: eq(entityAttributes.entityId, found.id),
+        orderBy: [asc(entityAttributes.name)],
       });
       entities.push({
         id: found.id,
@@ -314,6 +322,15 @@ export async function compileData(
   const detail = await getProject(db, userId, projectId);
   const pid = detail.project.id;
   const versionBefore = await getStateVersion(db, userId, pid);
+  let scope: string[] | null = null;
+  try {
+    scope = normalizeSectionScope(deps.onlySectionKeys);
+  } catch (error) {
+    if (error instanceof SpecificationValidationError) {
+      throw new DataCompilerError("VALIDATION", "pending", error.message);
+    }
+    throw error;
+  }
 
   const [allRequirements, knowledge, entityState] = await Promise.all([
     listRequirements(db, userId, pid),
@@ -343,7 +360,7 @@ export async function compileData(
         promptVersion: deps.promptVersion,
         model: deps.model,
         timeoutMs: deps.timeoutMs,
-        taskInput: buildTaskInput(live, knowledge, liveEntities, entityState.relationships),
+        taskInput: buildTaskInput(live, knowledge, liveEntities, entityState.relationships, scope),
         schema: DATA_COMPILATION_SCHEMA,
       },
       { provider: deps.provider, prompts, env: deps.env, cache: deps.cache },
@@ -372,6 +389,13 @@ export async function compileData(
     }
     throw error;
   }
+  assertSectionsInScope(
+    validated.sections.map((section) => section.key),
+    scope,
+    (message) => {
+      throw new DataCompilerError("VALIDATION", orchestrated.operationId, message);
+    },
+  );
 
   await ensureDocument(db, userId, pid, DATA_DOCUMENT_TYPE);
   const sections: SpecificationSectionRow[] = [];

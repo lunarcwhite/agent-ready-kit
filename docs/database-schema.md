@@ -1020,12 +1020,24 @@ description         text
 impact              enum
 confidence          enum
 
+source              enum
+
 status              enum
+
+resolution          text nullable
+resolved_at         timestamptz nullable
 
 created_at          timestamptz
 updated_at          timestamptz
-resolved_at         timestamptz nullable
 ```
+
+`source` records the assumption's origin (`USER_IMPLIED`,
+`AI_ASSUMED`, `AI_RECOMMENDED`, `SYSTEM_DERIVED`; ratified per
+TASK-074 — directly stated facts are knowledge or decisions, never
+assumptions, so there is no `USER_EXPLICIT`). `confidence` is strength
+of belief (`HIGH`, `MEDIUM`, `LOW`), not the EXPLICIT/INFERRED/ASSUMED
+provenance scale. `resolution` keeps the human's Confirm / Reject /
+Defer reason.
 
 Unique:
 

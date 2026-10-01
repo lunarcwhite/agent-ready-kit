@@ -10,7 +10,8 @@
 // - never array-index or LLM derived (monotonic per-counter sequences);
 // - never reused after removal (counters only move forward).
 
-export type IdentifierFamily = "DEC" | "FR" | "ENT" | "ARC" | "SCREEN" | "TASK" | "ISSUE" | "ASM" | "UTASK";
+export type IdentifierFamily =
+  "DEC" | "FR" | "ENT" | "ARC" | "SCREEN" | "TASK" | "ISSUE" | "ASM" | "UTASK" | "MS";
 
 export class IdentifierError extends Error {
   constructor(message: string) {
@@ -28,6 +29,10 @@ const FAMILIES: readonly IdentifierFamily[] = [
   "TASK",
   "ISSUE",
   "ASM",
+  // TASK-091 (spec §46): user-project milestones use MS-001… so milestone
+  // rows carry stable codes like every other planned artifact. The generic
+  // FAMILY-NNN path covers this family — no logic change beyond registration.
+  "MS",
   // TASK-090 (spec-decisions.md D-A10b): user-project tasks use UTASK-001…
   // so the implementation-plan TASK-xxx namespace stays unambiguous.
   // The generic FAMILY-NNN path in format/buildCounter/parse already covers

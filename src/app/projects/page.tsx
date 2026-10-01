@@ -4,6 +4,7 @@
 // when available, and last-updated info. Loading/error states live in
 // loading.tsx / error.tsx beside this file.
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { signOut } from "@/auth";
 import { getSessionUser } from "@/infrastructure/auth/identity";
 import { getDb } from "@/infrastructure/database/db";
@@ -51,12 +52,12 @@ export default async function ProjectsPage() {
           <p className="mt-1 text-sm text-zinc-600">Signed in as {user.email}.</p>
         </div>
         <div className="flex items-center gap-2">
-          <a
+          <Link
             href="/projects/new"
             className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             + New
-          </a>
+          </Link>
           <form action={logout}>
             <button
               type="submit"
@@ -74,12 +75,12 @@ export default async function ProjectsPage() {
           <p className="mt-1 text-sm text-zinc-600">
             Let&apos;s turn your first idea into an Agent Ready project.
           </p>
-          <a
+          <Link
             href="/projects/new"
             className="mt-4 inline-block rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
           >
             Create Project
-          </a>
+          </Link>
         </div>
       ) : (
         <ul className="flex flex-col gap-4">

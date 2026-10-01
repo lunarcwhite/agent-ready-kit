@@ -9,10 +9,9 @@
 // `task_dependencies` — so a future canonical implementation-plan domain can
 // claim the bare names without a rename.
 //
-// `tasks` field mapping (§47): milestone is a nullable varchar(64) label on
-// the row — there is no milestones table yet (that belongs to TASK-091), and
-// moving a task between milestones is a plain label edit that keeps the
-// stable code. Requirement/architecture/entity/screen references ride the
+// `tasks` field mapping (§47): membership is the nullable milestone_id FK
+// (TASK-091) — the TASK-090 free-text label is replaced, so moves are
+// validated same-project links that keep stable UTASK codes. Requirement/architecture/entity/screen references ride the
 // `references` jsonb column as shape-validated loose refs (mirroring
 // requirements.metadata.sources precedent): spec §47 lists the reference
 // families but defines no column for them, and traceability_links (TASK-024,
@@ -44,6 +43,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { timestampColumns, uuidPrimaryKey } from "./helpers";
+import { milestones } from "./milestones";
 import { projects } from "./projects";
 
 // Planning status (tasks.md §4). Lifecycle transitions are TASK-092's job;
@@ -71,7 +71,7 @@ export const userTasks = pgTable(
     objective: text("objective").notNull(),
     status: userTaskStatus("status").notNull().default("PENDING"),
     priority: userTaskPriority("priority").notNull(),
-    milestone: varchar("milestone", { length: 64 }),
+    milestoneId: uuid("milestone_id").references(() => milestones.id),
     implementationNotes: text("implementation_notes"),
     acceptanceCriteria: jsonb("acceptance_criteria").notNull(),
     definitionOfDone: jsonb("definition_of_done").notNull(),
@@ -82,6 +82,7 @@ export const userTasks = pgTable(
   (table) => [
     uniqueIndex("user_tasks_project_id_task_code_unique").on(table.projectId, table.taskCode),
     index("user_tasks_project_id_status_idx").on(table.projectId, table.status),
+    index("user_tasks_milestone_id_idx").on(table.milestoneId),
   ],
 );
 

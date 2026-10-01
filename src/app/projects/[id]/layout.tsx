@@ -26,6 +26,7 @@
 // id="content"> there are nested main landmarks. This shell intentionally
 // imposes no max-width so child pages keep their full width usable.
 import { use } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { NAV_SECTIONS, getActiveNav } from "./nav";
@@ -60,12 +61,12 @@ export default function ProjectLayout({
       <aside className="border-b border-zinc-200 lg:flex lg:w-60 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between gap-3 p-4 lg:flex-col lg:items-stretch">
           <div className="min-w-0">
-            <a
+            <Link
               href="/projects"
               className={`text-sm text-zinc-500 hover:underline ${FOCUS_RING} rounded`}
             >
               ← All projects
-            </a>
+            </Link>
             <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
               Project
             </p>

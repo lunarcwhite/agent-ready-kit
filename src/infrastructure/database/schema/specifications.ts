@@ -163,3 +163,43 @@ export const specificationVersions = pgTable(
     index("specification_versions_document_id_idx").on(table.documentId),
   ],
 );
+
+// Proposed-change lifecycle (TASK-132, database-schema.md §35).
+//
+// AI-generated modifications awaiting human review. MVP targets
+// SPECIFICATION_SECTION rows only — the generic (target_type, target_id)
+// shape leaves room for future targets without a schema change.
+// base_state_version is the canonical clock (TASK-020): a proposal created
+// at state N whose project has since moved to N+1 is stale and must not
+// apply over newer state. Polymorphic target refs follow §67: the domain
+// service validates same-project scope instead of the database.
+export const proposalTargetType = pgEnum("proposal_target_type", ["SPECIFICATION_SECTION"]);
+
+export const proposalChangeType = pgEnum("proposal_change_type", ["UPDATE_CONTENT"]);
+
+export const proposalStatus = pgEnum("proposal_status", ["PENDING", "ACCEPTED", "REJECTED"]);
+
+export const proposedChanges = pgTable(
+  "proposed_changes",
+  {
+    ...uuidPrimaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id),
+    targetType: proposalTargetType("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    changeType: proposalChangeType("change_type").notNull(),
+    previousContent: jsonb("previous_content"),
+    proposedContent: jsonb("proposed_content").notNull(),
+    reason: text("reason"),
+    baseStateVersion: integer("base_state_version").notNull(),
+    status: proposalStatus("status").notNull().default("PENDING"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    ...timestampColumns(),
+  },
+  (table) => [
+    index("proposed_changes_project_id_idx").on(table.projectId),
+    index("proposed_changes_project_id_status_idx").on(table.projectId, table.status),
+    index("proposed_changes_target_idx").on(table.targetType, table.targetId),
+  ],
+);

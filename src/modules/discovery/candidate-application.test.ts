@@ -18,6 +18,7 @@ import { getStateVersion } from "../projects/state-version";
 import { ProjectNotFoundError } from "../projects/errors";
 import { createDecision, getDecisionByKey, getDecisionHistory } from "../decisions/decisions";
 import { registerDependency } from "../decisions/dependencies";
+import { listAssumptions } from "../validation/assumptions";
 import { ensureDiscoveryMap } from "./discovery";
 import type { AnswerInterpretation } from "../../ai/schemas/answer-interpretation";
 import {
@@ -107,9 +108,10 @@ describeDb("applyInterpretation (integration)", () => {
 
         expect(result.applied).toHaveLength(4);
         expect(result.assumptionsDeferred).toBe(1);
+        expect(result.assumptionsPersisted).toEqual(["ASM-001"]);
         expect(result.unresolvedDeferred).toBe(1);
         expect(result.stateVersionBefore).toBe(before);
-        expect(result.stateVersionAfter).toBe(before + 4);
+        expect(result.stateVersionAfter).toBe(before + 5);
 
         const auth = await getDecisionByKey(db, owner.id, projectId, "authentication.required");
         expect(auth.status).toBe("CONFIRMED");
@@ -124,6 +126,20 @@ describeDb("applyInterpretation (integration)", () => {
         // History recorded every accepted change.
         const history = await getDecisionHistory(db, owner.id, projectId, "multi_user");
         expect(history.length).toBeGreaterThanOrEqual(1);
+
+        // Interpreted assumptions persist as OPEN USER_IMPLIED inventory rows.
+        const stored = await listAssumptions(db, owner.id, projectId, { status: "OPEN" });
+        expect(stored).toHaveLength(1);
+        expect(stored[0]).toMatchObject({
+          assumptionCode: "ASM-001",
+          source: "USER_IMPLIED",
+          impact: "MEDIUM",
+        });
+
+        // Re-applying the same answer normalizes duplicates: no second row.
+        const rerun = await applyInterpretation(db, owner.id, projectId, PERSONAL_APP);
+        expect(rerun.assumptionsPersisted).toEqual([]);
+        expect(await listAssumptions(db, owner.id, projectId)).toHaveLength(1);
       });
     } finally {
       await pool.end();

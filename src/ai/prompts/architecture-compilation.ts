@@ -9,7 +9,7 @@ import type { PromptDefinition } from "./types";
 import { ARCHITECTURE_COMPILATION_SCHEMA_ID } from "../schemas/architecture-compilation";
 
 export const ARCHITECTURE_COMPILATION_PROMPT_KEY = "architecture.compile";
-export const ARCHITECTURE_COMPILATION_PROMPT_VERSION = "1.0";
+export const ARCHITECTURE_COMPILATION_PROMPT_VERSION = "1.1";
 
 export const ARCHITECTURE_COMPILATION_PROMPT: PromptDefinition = {
   key: ARCHITECTURE_COMPILATION_PROMPT_KEY,
@@ -25,6 +25,7 @@ export const ARCHITECTURE_COMPILATION_PROMPT: PromptDefinition = {
     "Unresolved architecture decisions stay visible as open questions — never present them in prose as if decided.",
     "Anything the input does not settle belongs in unknowns with a concrete resolving question — never in prose as if decided.",
     "Section keys use lowercase dot-notation within the architecture namespace.",
+    "When the task input specifies onlySectionKeys, regenerate ONLY those sections plus the unknowns bucket — omit every other section; they are preserved verbatim and must not be rewritten.",
     "Return valid JSON matching the required output schema and nothing else.",
   ],
   outputSchema: ARCHITECTURE_COMPILATION_SCHEMA_ID,

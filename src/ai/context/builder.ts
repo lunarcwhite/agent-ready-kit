@@ -29,6 +29,8 @@ export const CAPABILITIES = [
   "architecture-compilation",
   "data-compilation",
   "design-compilation",
+  "product-agents-compilation",
+  "soul-compilation",
   "semantic-validation",
   "assumption-detection",
   "task-generation",
@@ -146,6 +148,7 @@ export async function buildContext(
     "architecture-compilation",
     "data-compilation",
     "design-compilation",
+    "product-agents-compilation",
     "semantic-validation",
     "assumption-detection",
     "task-generation",
@@ -281,6 +284,17 @@ export async function buildContext(
       } else {
         push("projectSummary", "recommended", projectSummary);
       }
+      break;
+    }
+    case "product-agents-compilation": {
+      push("projectSummary", "essential", projectSummary);
+      push("requirements", "essential", loaded.requirements);
+      push("confirmedDecisions", "recommended", confirmedDecisions(loaded));
+      break;
+    }
+    case "soul-compilation": {
+      push("projectSummary", "essential", projectSummary);
+      push("confirmedDecisions", "recommended", confirmedDecisions(loaded));
       break;
     }
     case "context-compilation":

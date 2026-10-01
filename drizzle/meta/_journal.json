@@ -141,6 +141,34 @@
       "when": 1790797700000,
       "tag": "0019_entities",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": 7,
+      "when": 1790797800000,
+      "tag": "0020_proposed_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": 7,
+      "when": 1790799000000,
+      "tag": "0021_assumptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": 7,
+      "when": 1790800200000,
+      "tag": "0022_milestones",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": 7,
+      "when": 1790800300000,
+      "tag": "0023_export_history",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,10 @@
-// Traceability graph service (TASK-024, FR-050, database-schema.md §44).
+// Traceability graph service (TASK-024, TASK-076, FR-050, database-schema.md §44).
 //
 // Directed links between canonical artifacts: DECISION → REQUIREMENT,
-// REQUIREMENT → (future ENT/ARC/SCREEN/TASK/KNOWLEDGE). The node-type
-// registry below is the controlled vocabulary §67 demands — extend it as
-// new artifact tables land; the storage columns stay untouched.
+// REQUIREMENT → ARC / SCREEN / ENT (downstream coverage for TASK-076).
+// The node-type registry below is the controlled vocabulary §67 demands —
+// extend it as new artifact tables land; the storage columns stay
+// untouched.
 //
 // Entry rule (TASK-014): every function resolves ownership through
 // requireProjectScope first, and both endpoints are resolved WITHIN that
@@ -22,14 +23,18 @@ import { and, asc, eq } from "drizzle-orm";
 import type { AppDatabase } from "../../infrastructure/database/db";
 import { isUniqueViolationError } from "../../infrastructure/database/errors";
 import { traceabilityLinks } from "../../infrastructure/database/schema/traceability";
+import { architectureComponents, screens } from "../../infrastructure/database/schema/architecture";
 import { decisions } from "../../infrastructure/database/schema/decisions";
+import { domainEntities } from "../../infrastructure/database/schema/entities";
 import { requirements } from "../../infrastructure/database/schema/requirements";
 import { requireProjectScope } from "../projects/repository";
 import { TraceabilityNotFoundError, TraceabilityValidationError } from "./errors";
 
 // Node kinds with existence checks TODAY. Append-only registry: adding a
 // kind means adding one case to resolveNode — no migration, no backfill.
-export const TRACEABILITY_NODE_TYPES = ["DECISION", "REQUIREMENT"] as const;
+// ARC/SCREEN/ENT serve REQUIREMENT downstream coverage (TASK-076:
+// FR → architecture / design / data).
+export const TRACEABILITY_NODE_TYPES = ["DECISION", "REQUIREMENT", "ARC", "SCREEN", "ENT"] as const;
 export type TraceabilityNodeType = (typeof TRACEABILITY_NODE_TYPES)[number];
 
 export interface TraceabilityNodeRef {
@@ -107,6 +112,30 @@ async function resolveNode(
       where: and(eq(decisions.projectId, projectId), eq(decisions.id, node.id)),
     });
     if (!found) throw new TraceabilityNotFoundError(`${field} decision does not exist.`);
+    return;
+  }
+  if (node.type === "ARC" || node.type === "SCREEN" || node.type === "ENT") {
+    // Builder API (not db.query) so this case compiles without touching the
+    // shared relational registry — same posture as the validation modules.
+    // REMOVED rows are withdrawn and cannot be linked; SUPERSEDED rows stay
+    // linkable as frozen history (same rule as requirements below).
+    const table =
+      node.type === "ARC"
+        ? architectureComponents
+        : node.type === "SCREEN"
+          ? screens
+          : domainEntities;
+    const label = node.type === "ARC" ? "component" : node.type === "SCREEN" ? "screen" : "entity";
+    const rows = await db
+      .select({ id: table.id, status: table.status })
+      .from(table)
+      .where(and(eq(table.projectId, projectId), eq(table.id, node.id)))
+      .limit(1);
+    const found = rows[0];
+    if (!found) throw new TraceabilityNotFoundError(`${field} ${label} does not exist.`);
+    if (found.status === "REMOVED") {
+      throw new TraceabilityValidationError(`${field} ${label} is withdrawn and cannot be linked.`);
+    }
     return;
   }
   const found = await db.query.requirements.findFirst({

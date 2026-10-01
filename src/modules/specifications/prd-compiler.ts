@@ -50,6 +50,7 @@ import {
 import { KnowledgeNotFoundError } from "../knowledge/errors";
 import { ensureDocument, upsertSection, type SpecificationSectionRow } from "./documents";
 import { setSectionDependencies } from "./dependencies";
+import { assertSectionsInScope, normalizeSectionScope } from "./scope";
 import { SpecificationValidationError } from "./errors";
 
 export const PRD_COMPILER_CAPABILITY = "product-compilation" as const;
@@ -77,6 +78,7 @@ export interface CompilePrdDeps {
   promptVersion?: string;
   model?: string;
   timeoutMs?: number;
+  onlySectionKeys?: string[];
 }
 
 export interface CompilePrdResult {
@@ -115,8 +117,13 @@ function ensurePrompt(registry: PromptRegistry): void {
   }
 }
 
-function buildTaskInput(requirements: RequirementRow[], knowledge: KnowledgeItemRow[]): string {
+function buildTaskInput(
+  requirements: RequirementRow[],
+  knowledge: KnowledgeItemRow[],
+  scope: string[] | null,
+): string {
   return JSON.stringify({
+    scope,
     requirements: requirements.map((requirement) => ({
       code: requirement.requirementCode,
       type: requirement.type,
@@ -241,6 +248,15 @@ export async function compilePrd(
   const detail = await getProject(db, userId, projectId);
   const pid = detail.project.id;
   const versionBefore = await getStateVersion(db, userId, pid);
+  let scope: string[] | null = null;
+  try {
+    scope = normalizeSectionScope(deps.onlySectionKeys);
+  } catch (error) {
+    if (error instanceof SpecificationValidationError) {
+      throw new PrdCompilerError("VALIDATION", "pending", error.message);
+    }
+    throw error;
+  }
 
   const [requirements, knowledge] = await Promise.all([
     listRequirements(db, userId, pid),
@@ -266,7 +282,7 @@ export async function compilePrd(
         promptVersion: deps.promptVersion,
         model: deps.model,
         timeoutMs: deps.timeoutMs,
-        taskInput: buildTaskInput(live, knowledge),
+        taskInput: buildTaskInput(live, knowledge, scope),
         schema: PRODUCT_COMPILATION_SCHEMA,
       },
       { provider: deps.provider, prompts, env: deps.env, cache: deps.cache },
@@ -295,6 +311,13 @@ export async function compilePrd(
     }
     throw error;
   }
+  assertSectionsInScope(
+    validated.sections.map((section) => section.key),
+    scope,
+    (message) => {
+      throw new PrdCompilerError("VALIDATION", orchestrated.operationId, message);
+    },
+  );
 
   await ensureDocument(db, userId, pid, PRD_DOCUMENT_TYPE);
   const sections: SpecificationSectionRow[] = [];

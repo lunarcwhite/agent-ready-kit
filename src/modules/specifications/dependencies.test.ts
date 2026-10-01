@@ -19,11 +19,12 @@ import { getStateVersion } from "../projects/state-version";
 import { createDecision } from "../decisions/decisions";
 import { createRequirement } from "../requirements/requirements";
 import { createKnowledgeItem } from "../knowledge/knowledge";
-import { SpecificationValidationError } from "./errors";
+import { SpecificationNotFoundError, SpecificationValidationError } from "./errors";
 import { getSection, upsertSection } from "./documents";
 import {
   computeDependencyHash,
   listSectionDependencies,
+  listSectionSources,
   listSectionsDependingOn,
   markStaleDependents,
   setSectionDependencies,
@@ -227,6 +228,61 @@ describeDb("specification dependencies (integration)", () => {
             "00000000-0000-0000-0000-000000000099",
           ),
         ).toEqual([]);
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("resolves section sources to human labels", async () => {
+    const pool = new Pool({ connectionString: url });
+    try {
+      await withRolledBackTransaction(pool, async () => {
+        const db = drizzle(pool, { schema });
+        const [owner] = await db
+          .insert(schema.users)
+          .values({ email: `sourcelabel-${Date.now()}@example.com` })
+          .returning();
+        const project = await createProject(db, owner.id, { name: "S", idea: "source labels" });
+        const pid = project.project.id;
+        const requirement = await createRequirement(db, owner.id, pid, {
+          type: "FUNCTIONAL",
+          title: "Login",
+          description: "Users can log in.",
+          priority: "MUST",
+          status: "CONFIRMED",
+        });
+        const knowledge = await createKnowledgeItem(db, owner.id, pid, {
+          knowledgeKey: "users.primary",
+          domain: "Users",
+          title: "Solo",
+          content: { users: 1 },
+          confidence: "EXPLICIT",
+          sources: [{ type: "PROJECT_INPUT" }],
+        });
+        await upsertSection(db, owner.id, pid, "PRD", {
+          sectionKey: "product.scope",
+          title: "Scope",
+          renderedContent: "Scope text.",
+        });
+        await setSectionDependencies(db, owner.id, pid, "PRD", "product.scope", [
+          { sourceType: "REQUIREMENT", sourceId: requirement.id },
+          { sourceType: "KNOWLEDGE", sourceId: knowledge.id },
+        ]);
+
+        const sources = await listSectionSources(db, owner.id, pid, "PRD", "product.scope");
+        expect(sources.map((source) => source.label).sort()).toEqual([
+          requirement.requirementCode,
+          "users.primary",
+        ]);
+        expect(sources.map((source) => source.sourceType).sort()).toEqual([
+          "KNOWLEDGE",
+          "REQUIREMENT",
+        ]);
+
+        await expect(
+          listSectionSources(db, owner.id, pid, "PRD", "product.missing"),
+        ).rejects.toBeInstanceOf(SpecificationNotFoundError);
       });
     } finally {
       await pool.end();

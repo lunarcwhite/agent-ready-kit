@@ -36,6 +36,7 @@ import {
   updateUserTask,
   type CreateUserTaskInput,
 } from "./user-tasks";
+import { createMilestone } from "./milestones";
 
 const BASE: CreateUserTaskInput = {
   title: "Set up project",
@@ -106,7 +107,7 @@ describe("user-task input validation", () => {
       createUserTask(db, "u-1", "p-1", { ...BASE, definitionOfDone: [] }),
     ).rejects.toBeInstanceOf(UserTaskValidationError);
     await expect(
-      createUserTask(db, "u-1", "p-1", { ...BASE, milestone: "x".repeat(65) }),
+      createUserTask(db, "u-1", "p-1", { ...BASE, milestoneId: "not-a-uuid" }),
     ).rejects.toBeInstanceOf(UserTaskValidationError);
     await expect(
       createUserTask(db, "u-1", "p-1", { ...BASE, sortOrder: 1.5 }),
@@ -207,17 +208,20 @@ describeDb("user-task domain model (integration)", () => {
 
         const reread = await getUserTaskByCode(db, owner.id, pid, "UTASK-001");
         expect(reread.id).toBe(created.id);
+        const milestone = await createMilestone(db, owner.id, pid, { title: "M1" });
         const second = await createUserTask(db, owner.id, pid, {
           ...BASE,
           title: "Second",
           priority: "P1",
-          milestone: "M1",
+          milestoneId: milestone.id,
           sortOrder: 1,
         });
         expect(second.taskCode).toBe("UTASK-002");
         expect(await listUserTasks(db, owner.id, pid)).toHaveLength(2);
         expect(await listUserTasks(db, owner.id, pid, { priority: "P1" })).toHaveLength(1);
-        expect(await listUserTasks(db, owner.id, pid, { milestone: "M1" })).toHaveLength(1);
+        expect(await listUserTasks(db, owner.id, pid, { milestoneId: milestone.id })).toHaveLength(
+          1,
+        );
       });
     } finally {
       await pool.end();
@@ -237,13 +241,26 @@ describeDb("user-task domain model (integration)", () => {
         const pid = project.project.id;
         await createUserTask(db, owner.id, pid, BASE);
 
+        const first = await createMilestone(db, owner.id, pid, { title: "M1" });
+        const second = await createMilestone(db, owner.id, pid, { title: "M2" });
         const updated = await updateUserTask(db, owner.id, pid, "UTASK-001", {
           priority: "P2",
-          milestone: "M2",
+          milestoneId: second.id,
         });
         expect(updated.priority).toBe("P2");
-        expect(updated.milestone).toBe("M2");
+        expect(updated.milestoneId).toBe(second.id);
         expect(updated.taskCode).toBe("UTASK-001");
+
+        // Moves keep the stable code; unassigning clears the link.
+        const moved = await updateUserTask(db, owner.id, pid, "UTASK-001", {
+          milestoneId: first.id,
+        });
+        expect(moved.milestoneId).toBe(first.id);
+        expect(moved.taskCode).toBe("UTASK-001");
+        const unassigned = await updateUserTask(db, owner.id, pid, "UTASK-001", {
+          milestoneId: null,
+        });
+        expect(unassigned.milestoneId).toBeNull();
 
         const noop = await updateUserTask(db, owner.id, pid, "UTASK-001", {});
         expect(noop.priority).toBe("P2");

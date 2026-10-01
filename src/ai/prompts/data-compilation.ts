@@ -9,7 +9,7 @@ import type { PromptDefinition } from "./types";
 import { DATA_COMPILATION_SCHEMA_ID } from "../schemas/data-compilation";
 
 export const DATA_COMPILATION_PROMPT_KEY = "data.compile";
-export const DATA_COMPILATION_PROMPT_VERSION = "1.0";
+export const DATA_COMPILATION_PROMPT_VERSION = "1.1";
 
 export const DATA_COMPILATION_PROMPT: PromptDefinition = {
   key: DATA_COMPILATION_PROMPT_KEY,
@@ -26,6 +26,7 @@ export const DATA_COMPILATION_PROMPT: PromptDefinition = {
     "Unresolved persistence questions stay visible as open questions — never present them in prose as if decided.",
     "Anything the input does not settle belongs in unknowns with a concrete resolving question — never in prose as if decided.",
     "Section keys use lowercase dot-notation within the data namespace.",
+    "When the task input specifies onlySectionKeys, regenerate ONLY those sections plus the unknowns bucket — omit every other section; they are preserved verbatim and must not be rewritten.",
     "Return valid JSON matching the required output schema and nothing else.",
   ],
   outputSchema: DATA_COMPILATION_SCHEMA_ID,

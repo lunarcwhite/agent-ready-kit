@@ -19,9 +19,10 @@
 // - EXPLICIT always confirms: an explicit user statement is authoritative,
 //   including upgrades from RECOMMENDED with source correction.
 //
-// Assumptions and unresolved topics are counted and returned untouched:
-// assumptions belong to the assumption inventory (TASK-074), and this
-// module must never launder one into a decision.
+// Assumptions and unresolved topics are deferred, not dropped:
+// assumptions persist into the assumption inventory (TASK-074) as OPEN
+// USER_IMPLIED rows, and this module still never launders one into a
+// decision. Unresolved topics are counted for the caller to route.
 import type { AppDatabase } from "../../infrastructure/database/db";
 import type { AnswerInterpretation } from "../../ai/schemas/answer-interpretation";
 import { assertInterpretationBusinessRules } from "./answer-interpreter";
@@ -35,6 +36,7 @@ import {
 import { DecisionNotFoundError, DecisionValidationError } from "../decisions/errors";
 import { requireProjectScope } from "../projects/repository";
 import { getStateVersion } from "../projects/state-version";
+import { assumptionDedupeKey, createAssumption, listAssumptions } from "../validation/assumptions";
 import { withProvenance, type Provenance } from "../provenance/provenance";
 import { DiscoveryValidationError } from "./errors";
 
@@ -51,6 +53,7 @@ export interface AppliedCandidate {
 export interface ApplyInterpretationResult {
   applied: AppliedCandidate[];
   assumptionsDeferred: number;
+  assumptionsPersisted: string[];
   unresolvedDeferred: number;
   stateVersionBefore: number;
   stateVersionAfter: number;
@@ -228,9 +231,46 @@ export async function applyInterpretation(
   if (applied.length === 0 && interpretation.decisions.length > 0) {
     throw new DecisionValidationError("No candidate decisions could be applied.");
   }
+
+  // Phase 3 — persist interpreted assumptions into the inventory
+  // (TASK-074) instead of dropping them. Each assumption derives from the
+  // user's own answer, so origin is USER_IMPLIED; the interpreter carries
+  // no strength signal, so confidence defaults to MEDIUM (documented, not
+  // model-derived). Dedupe by stable key against live rows so re-applying
+  // the same answer never mints duplicates. Like decisions above, each
+  // persists in its own transaction with its own version bump — a failure
+  // propagates with earlier rows kept, never half-written.
+  const assumptionsPersisted: string[] = [];
+  if (interpretation.assumptions.length > 0) {
+    const live = await listAssumptions(db, userId, scope.projectId);
+    const liveKeys = new Set(
+      live
+        .filter((row) => row.status === "OPEN" || row.status === "DEFERRED")
+        .map((row) => assumptionDedupeKey(row.title)),
+    );
+    for (const assumption of interpretation.assumptions) {
+      const title =
+        assumption.statement.length > 255
+          ? assumption.statement.slice(0, 255)
+          : assumption.statement;
+      const key = assumptionDedupeKey(title);
+      if (liveKeys.has(key)) continue;
+      liveKeys.add(key);
+      const row = await createAssumption(db, userId, scope.projectId, {
+        title,
+        description: assumption.statement,
+        impact: assumption.impact,
+        confidence: "MEDIUM",
+        source: "USER_IMPLIED",
+      });
+      assumptionsPersisted.push(row.assumptionCode);
+    }
+  }
+
   return {
     applied,
     assumptionsDeferred: interpretation.assumptions.length,
+    assumptionsPersisted,
     unresolvedDeferred: interpretation.unresolved.length,
     stateVersionBefore,
     stateVersionAfter: await getStateVersion(db, userId, scope.projectId),

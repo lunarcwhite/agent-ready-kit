@@ -10,7 +10,7 @@ import type { PromptDefinition } from "./types";
 import { PRODUCT_COMPILATION_SCHEMA_ID } from "../schemas/product-compilation";
 
 export const PRODUCT_COMPILATION_PROMPT_KEY = "product.compile-prd";
-export const PRODUCT_COMPILATION_PROMPT_VERSION = "1.0";
+export const PRODUCT_COMPILATION_PROMPT_VERSION = "1.1";
 
 export const PRODUCT_COMPILATION_PROMPT: PromptDefinition = {
   key: PRODUCT_COMPILATION_PROMPT_KEY,
@@ -25,6 +25,7 @@ export const PRODUCT_COMPILATION_PROMPT: PromptDefinition = {
     "Do not select technical architecture, databases, or providers unless a confirmed constraint names them.",
     "Anything the input does not settle belongs in unknowns with a concrete resolving question — never in prose as if decided.",
     "Section keys use lowercase dot-notation within the product namespace.",
+    "When the task input specifies onlySectionKeys, regenerate ONLY those sections plus the unknowns bucket — omit every other section; they are preserved verbatim and must not be rewritten.",
     "Return valid JSON matching the required output schema and nothing else.",
   ],
   outputSchema: PRODUCT_COMPILATION_SCHEMA_ID,
