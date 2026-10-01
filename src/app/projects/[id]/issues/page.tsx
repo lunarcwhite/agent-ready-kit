@@ -12,7 +12,14 @@
 // renders inline via ?code= rather than a separate route (design.md §92:
 // SCREEN-* are concepts, not mandatory URLs).
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
+import {
+  BackLink,
+  Badge,
+  Chip,
+  PageHeader,
+  btnPrimary,
+  btnSecondary,
+} from "@/app/components/ui";
 import type { AppDatabase } from "@/infrastructure/database/db";
 import { getSessionUser } from "@/infrastructure/auth/identity";
 import { getDb } from "@/infrastructure/database/db";
@@ -173,6 +180,10 @@ export default async function IssuesPage({
       if (!(error instanceof IssueNotFoundError)) throw error;
     }
   }
+  // An unresolvable ?code= is silently ignored (list renders unchanged).
+  // Surface that fallback; the list rendering below is unchanged.
+  const unknownIssueParam =
+    query.code !== undefined && query.code !== "" && detail === null;
 
   const base = `/projects/${projectId}/issues`;
   const listHref = (severity: string, status: string) =>
@@ -181,16 +192,30 @@ export default async function IssuesPage({
     `${base}?severity=${encodeURIComponent(activeSeverity)}&status=${encodeURIComponent(activeStatus)}&code=${code}`;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-8">
-      <div>
-        <Link href="/projects" className="text-sm text-zinc-500 hover:underline">
-          ← Projects
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Validation issues</h1>
-        <p className="mt-1 text-sm text-zinc-600">
-          {blockerCount} blockers · {highCount} high · {issues.length} shown
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
+      <PageHeader
+        eyebrow={<BackLink href="/projects">← Projects</BackLink>}
+        title="Validation issues"
+        description={`${blockerCount} blockers · ${highCount} high · ${issues.length} shown`}
+        meta={
+          <Badge status={blockerCount > 0 ? "BLOCKER" : highCount > 0 ? "HIGH" : "RESOLVED"}>
+            {blockerCount > 0
+              ? `${blockerCount} blocker${blockerCount === 1 ? "" : "s"} open`
+              : highCount > 0
+                ? `${highCount} high open`
+                : "No blockers"}
+          </Badge>
+        }
+      />
+
+      {unknownIssueParam && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          Issue not found. It may have been resolved and archived; pick another issue below.
         </p>
-      </div>
+      )}
 
       <nav aria-label="Filter by severity" className="flex flex-wrap gap-2">
         {ISSUE_SEVERITY_FILTERS.map((filter) => (
@@ -198,10 +223,10 @@ export default async function IssuesPage({
             key={filter}
             href={listHref(filter, activeStatus)}
             aria-current={activeSeverity === filter ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm transition-colors ${
               activeSeverity === filter
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 hover:bg-zinc-50"
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
             }`}
           >
             {filter}
@@ -214,10 +239,10 @@ export default async function IssuesPage({
             key={filter}
             href={listHref(activeSeverity, filter)}
             aria-current={activeStatus === filter ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm transition-colors ${
               activeStatus === filter
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 hover:bg-zinc-50"
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
             }`}
           >
             {filter}
@@ -226,7 +251,7 @@ export default async function IssuesPage({
       </nav>
 
       {ordered.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">
+        <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
           No issues match. Run validation and findings appear here.
         </p>
       ) : (
@@ -234,28 +259,29 @@ export default async function IssuesPage({
           {ordered.map((issue) => {
             const severity = issueSeverityLabel(issue.severity);
             const type = issueTypeLabel(issue.type);
-            const prominent = issue.severity === "BLOCKER" || issue.severity === "HIGH";
             return (
               <li
                 key={issue.issueCode}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded border p-3 ${
-                  prominent ? "border-zinc-900 bg-zinc-50" : "border-zinc-200"
-                }`}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    <span className="mr-2 font-mono text-xs text-zinc-500">{issue.issueCode}</span>
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    <Chip>{issue.issueCode}</Chip>
                     {issue.title}
                   </p>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    {severity.glyph} {severity.label} · {type.glyph} {type.label} · {issue.status} ·{" "}
-                    {issue.references.length} artifact
-                    {issue.references.length === 1 ? "" : "s"}
+                  <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    <Badge status={issue.severity}>{severity.glyph} {severity.label}</Badge>
+                    <Badge status={issue.type}>{type.glyph} {type.label}</Badge>
+                    <Badge status={issue.status}>{issue.status}</Badge>
+                    <span>
+                      {issue.references.length} artifact
+                      {issue.references.length === 1 ? "" : "s"}
+                    </span>
                   </p>
                 </div>
                 <a
                   href={detailHref(issue.issueCode)}
-                  className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
+                  className={btnSecondary}
                 >
                   View
                 </a>
@@ -266,31 +292,34 @@ export default async function IssuesPage({
       )}
 
       {detail && (
-        <section aria-label="Issue detail" className="rounded border border-zinc-900 p-4">
-          <h2 className="text-lg font-semibold">{detail.row.title}</h2>
-          <p className="font-mono text-xs text-zinc-500">{detail.row.issueCode}</p>
-          <p className="mt-2 text-sm text-zinc-600">
-            {issueSeverityLabel(detail.row.severity).glyph}{" "}
-            {issueSeverityLabel(detail.row.severity).label} ·{" "}
-            {issueTypeLabel(detail.row.type).glyph} {issueTypeLabel(detail.row.type).label} ·{" "}
-            {detail.row.status}
+        <section aria-label="Issue detail" className="rounded-lg border border-zinc-900 bg-white p-5 dark:border-zinc-100 dark:bg-zinc-950">
+          <h2 className="text-lg font-semibold tracking-tight">{detail.row.title}</h2>
+          <p className="mt-1 flex flex-wrap items-center gap-2">
+            <Chip>{detail.row.issueCode}</Chip>
+            <Badge status={detail.row.severity}>
+              {issueSeverityLabel(detail.row.severity).glyph} {issueSeverityLabel(detail.row.severity).label}
+            </Badge>
+            <Badge status={detail.row.type}>
+              {issueTypeLabel(detail.row.type).glyph} {issueTypeLabel(detail.row.type).label}
+            </Badge>
+            <Badge status={detail.row.status}>{detail.row.status}</Badge>
           </p>
-          <p className="mt-1 text-sm text-zinc-500">{issueTypeLabel(detail.row.type).hint}</p>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{issueTypeLabel(detail.row.type).hint}</p>
           <p className="mt-3 text-sm">{detail.row.description}</p>
 
           <h3 className="mt-4 text-sm font-medium">Affected artifacts</h3>
           {detail.references.length === 0 ? (
-            <p className="mt-1 text-sm text-zinc-500">No linked artifacts.</p>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">No linked artifacts.</p>
           ) : (
             <ul className="mt-1 flex flex-col gap-1 text-sm">
               {detail.references.map((reference) => (
                 <li key={reference.key}>
                   {reference.href ? (
-                    <a href={reference.href} className="text-zinc-900 underline">
+                    <a href={reference.href} className="text-zinc-900 underline dark:text-zinc-100">
                       {reference.label}
                     </a>
                   ) : (
-                    <span className="text-zinc-700">{reference.label}</span>
+                    <span className="text-zinc-700 dark:text-zinc-300">{reference.label}</span>
                   )}
                 </li>
               ))}
@@ -301,7 +330,7 @@ export default async function IssuesPage({
             <>
               <h3 className="mt-4 text-sm font-medium">Resolve issue</h3>
               {query.error === "empty" && (
-                <p role="alert" className="mt-1 text-sm text-red-700">
+                <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">
                   Describe the resolution first.
                 </p>
               )}
@@ -315,12 +344,12 @@ export default async function IssuesPage({
                     name="resolution"
                     rows={2}
                     placeholder="What fixed it, or why it no longer applies."
-                    className="rounded border border-zinc-300 px-3 py-2 text-sm"
+                    className="rounded border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm"
                   />
                 </label>
                 <button
                   type="submit"
-                  className="w-fit rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+                  className={btnPrimary}
                 >
                   Mark resolved
                 </button>

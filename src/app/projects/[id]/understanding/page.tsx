@@ -20,6 +20,15 @@ import { getDiscoveryMap } from "@/modules/discovery/discovery";
 import { analyzeIdea, IdeaAnalysisError } from "@/modules/discovery/idea-analyst";
 import { buildUnderstandingView, confirmUnderstanding } from "@/modules/discovery/understanding";
 import { DiscoveryValidationError } from "@/modules/discovery/errors";
+import {
+  BackLink,
+  Badge,
+  PageHeader,
+  btnPrimary,
+  btnSecondary,
+  cardCls,
+  inputCls,
+} from "@/app/components/ui";
 
 async function confirmAction(projectId: string): Promise<void> {
   "use server";
@@ -56,16 +65,16 @@ async function correctAction(projectId: string, formData: FormData): Promise<voi
 
 function Section({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
-    <section aria-label={title} className="rounded border border-zinc-200 p-4">
-      <h2 className="text-sm font-medium text-zinc-500">{title}</h2>
+    <section aria-label={title} className={cardCls}>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{title}</h2>
       {items.length > 0 ? (
-        <ul className="mt-2 flex flex-col gap-1 text-sm">
+        <ul className="mt-2 flex flex-col gap-1.5 text-sm">
           {items.map((item) => (
             <li key={item}>• {item}</li>
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-zinc-500">{empty}</p>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{empty}</p>
       )}
     </section>
   );
@@ -102,18 +111,14 @@ export default async function UnderstandingPage({
   } catch (error) {
     if (!(error instanceof IdeaAnalysisError)) throw error;
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
-        <div>
-          <a href="/projects" className="text-sm text-zinc-500 hover:underline">
-            ← Projects
-          </a>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Here&apos;s what I understand so far
-          </h1>
-        </div>
+      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
+        <PageHeader
+          eyebrow={<BackLink href="/projects">← Projects</BackLink>}
+          title="Here's what I understand so far"
+        />
         <div
           role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
           <p className="font-medium">Understanding generation failed.</p>
           <p className="mt-1">Your project was not changed. Try again.</p>
@@ -126,36 +131,37 @@ export default async function UnderstandingPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
-      <div>
-        <a href="/projects" className="text-sm text-zinc-500 hover:underline">
-          ← Projects
-        </a>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          Here&apos;s what I understand so far
-        </h1>
-        <p className="mt-1 text-sm text-zinc-600">
-          {detail.project.name} · {view.productCategory}
-        </p>
-      </div>
+    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
+      <PageHeader
+        eyebrow={<BackLink href="/projects">← Projects</BackLink>}
+        title="Here's what I understand so far"
+        description={`${detail.project.name} · ${view.productCategory}`}
+        meta={
+          alreadyConfirmed ? (
+            <Badge status="CONFIRMED">Already confirmed: review or continue</Badge>
+          ) : (
+            <Badge status="NEEDS_REVIEW">Needs your review</Badge>
+          )
+        }
+      />
 
       {alreadyConfirmed && (
-        <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+        <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200">
           ✓ You already confirmed this understanding. Review again or continue to Discovery.
         </p>
       )}
       {query.error === "save" && (
         <p
           role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
-          Couldn&apos;t save that. Your approved work is unchanged — try again.
+          Couldn&apos;t save that. Your approved work is unchanged. Try again.
         </p>
       )}
       {query.error === "empty" && (
         <p
           role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
           The idea can&apos;t be empty. Describe what you want to build.
         </p>
@@ -163,14 +169,14 @@ export default async function UnderstandingPage({
       {query.error === "invalid" && (
         <p
           role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
           That correction is too long or invalid. Shorten it and try again.
         </p>
       )}
 
-      <section aria-label="Product" className="rounded border border-zinc-900 p-4">
-        <h2 className="text-sm font-medium text-zinc-500">Product</h2>
+      <section aria-label="Product" className="rounded-lg border border-zinc-900 bg-white p-5 dark:border-zinc-100 dark:bg-zinc-950">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Product</h2>
         <p className="mt-1 text-base">{view.productSummary}</p>
       </section>
 
@@ -189,10 +195,10 @@ export default async function UnderstandingPage({
         />
       )}
 
-      <section aria-label="Still unclear" className="rounded border border-zinc-200 p-4">
-        <h2 className="text-sm font-medium text-zinc-500">Still unclear</h2>
+      <section aria-label="Still unclear" className={cardCls}>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Still unclear</h2>
         {view.unclearAreas.length > 0 ? (
-          <ul className="mt-2 flex flex-col gap-1 text-sm">
+          <ul className="mt-2 flex flex-col gap-1.5 text-sm">
             {view.unclearAreas.map((row) => (
               <li key={`${row.domain}-${row.question}`}>
                 ? <span className="font-medium">{row.domain}:</span> {row.question}
@@ -200,8 +206,8 @@ export default async function UnderstandingPage({
             ))}
           </ul>
         ) : (
-          <p className="mt-2 text-sm text-zinc-500">
-            Nothing unclear — the idea covered everything.
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            Nothing unclear. The idea covered everything.
           </p>
         )}
       </section>
@@ -209,10 +215,10 @@ export default async function UnderstandingPage({
       {view.assumptions.length > 0 && (
         <section
           aria-label="Assumptions (not confirmed)"
-          className="rounded border border-amber-200 bg-amber-50 p-4"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950"
         >
-          <h2 className="text-sm font-medium text-amber-800">Assumed — not confirmed</h2>
-          <ul className="mt-2 flex flex-col gap-1 text-sm text-amber-900">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Assumed: not confirmed</h2>
+          <ul className="mt-2 flex flex-col gap-1.5 text-sm text-amber-900 dark:text-amber-200">
             {view.assumptions.map((row) => (
               <li key={row.statement}>
                 {row.glyph} {row.statement} · {row.impact} impact
@@ -225,50 +231,50 @@ export default async function UnderstandingPage({
       <form action={confirmAction.bind(null, projectId)}>
         <button
           type="submit"
-          className="w-full rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          className={`${btnPrimary} w-full`}
         >
-          Looks right — continue
+          Looks right: continue
         </button>
       </form>
 
-      <details className="rounded border border-zinc-200 px-3 py-2 text-sm">
+      <details className="rounded-lg border border-zinc-200 bg-white px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-950">
         <summary className="cursor-pointer font-medium">
           Something is wrong? Edit understanding
         </summary>
         <form action={correctAction.bind(null, projectId)} className="flex flex-col gap-3 pt-3">
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
             Describe your idea
             <textarea
               name="idea"
               rows={4}
               required
               defaultValue={detail.input.idea}
-              className="rounded border border-zinc-300 px-3 py-2"
+              className={inputCls}
             />
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
             Target users
             <input
               name="targetUsers"
               type="text"
               autoComplete="off"
               defaultValue={detail.input.targetUsers ?? ""}
-              className="rounded border border-zinc-300 px-3 py-2"
+              className={inputCls}
             />
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
             Constraints
             <input
               name="constraints"
               type="text"
               autoComplete="off"
               defaultValue={detail.input.constraints ?? ""}
-              className="rounded border border-zinc-300 px-3 py-2"
+              className={inputCls}
             />
           </label>
           <button
             type="submit"
-            className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50"
+            className={`${btnSecondary} w-fit`}
           >
             Save correction and re-analyze
           </button>

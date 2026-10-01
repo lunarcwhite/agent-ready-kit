@@ -18,7 +18,7 @@ export const ISSUE_TYPE_LABEL: Record<string, { label: string; glyph: string; hi
   CONSISTENCY: {
     label: "Contradiction",
     glyph: "≠",
-    hint: "Approved specs disagree — reconcile them.",
+    hint: "Approved specs disagree: reconcile them.",
   },
   DEPENDENCY: { label: "Dependency", glyph: "⤳", hint: "A reference does not resolve." },
   IMPLEMENTATION_COVERAGE: {
@@ -29,7 +29,7 @@ export const ISSUE_TYPE_LABEL: Record<string, { label: string; glyph: string; hi
   ASSUMPTION: {
     label: "Assumption",
     glyph: "?",
-    hint: "Unverified belief — confirm, replace, or reject it.",
+    hint: "Unverified belief: confirm, replace, or reject it.",
   },
   ORPHAN: { label: "Orphan", glyph: "∅", hint: "Nothing references this artifact." },
   SECURITY: { label: "Security", glyph: "⚠", hint: "Needs a security decision." },

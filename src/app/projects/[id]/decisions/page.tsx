@@ -28,6 +28,14 @@ import {
   filterToStatus,
   formatDecisionValue,
 } from "./labels";
+import {
+  BackLink,
+  Badge,
+  Chip,
+  PageHeader,
+  btnPrimary,
+  btnSecondary,
+} from "@/app/components/ui";
 
 async function confirmAction(projectId: string, decisionKey: string): Promise<void> {
   "use server";
@@ -138,31 +146,36 @@ export default async function DecisionsPage({
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-8">
-      <div>
-        <a href="/projects" className="text-sm text-zinc-500 hover:underline">
-          ← Projects
-        </a>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Decisions</h1>
-        <p className="mt-1 text-sm text-zinc-600">
-          {confirmed} confirmed · {unresolved} unresolved
-        </p>
-      </div>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
+      <PageHeader
+        eyebrow={<BackLink href="/projects">← Projects</BackLink>}
+        title="Decisions"
+        description={`${confirmed} confirmed · ${unresolved} unresolved. Recommendations stay recommendations until you confirm.`}
+        meta={<Badge status={unresolved > 0 ? "NEEDS_REVIEW" : "READY"}>{unresolved > 0 ? `${unresolved} need decision` : "All decided"}</Badge>}
+      />
 
       {query.error === "save" && (
         <p
           role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
-          Couldn&apos;t save that. Your approved decisions are unchanged — try again.
+          Couldn&apos;t save that. Your approved decisions are unchanged. Try again.
         </p>
       )}
       {query.error === "invalid" && (
         <p
           role="alert"
-          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
         >
           That value must be valid JSON, or the status is invalid.
+        </p>
+      )}
+      {query.code && !detail && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          Decision not found. It may have been removed; pick another decision below.
         </p>
       )}
 
@@ -172,10 +185,10 @@ export default async function DecisionsPage({
             key={filter}
             href={`/projects/${projectId}/decisions${filter === "All" ? "" : `?filter=${filter}`}`}
             aria-current={activeFilter === filter ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm transition-colors ${
               activeFilter === filter
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 hover:bg-zinc-50"
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
             }`}
           >
             {filter}
@@ -184,13 +197,13 @@ export default async function DecisionsPage({
       </nav>
 
       {decisions.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">
+        <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
           No decisions match this filter. Answer discovery questions and they appear here.
         </p>
       ) : (
         [...grouped.entries()].map(([category, rows]) => (
           <section key={category} aria-label={category}>
-            <h2 className="text-sm font-medium text-zinc-500">{category}</h2>
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{category}</h2>
             <ul className="mt-2 flex flex-col gap-2">
               {rows.map((row) => {
                 const badge = decisionStatusLabel(row.status);
@@ -201,24 +214,22 @@ export default async function DecisionsPage({
                 return (
                   <li
                     key={row.decisionCode}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 p-3"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        <span className="mr-2 font-mono text-xs text-zinc-500">
-                          {row.decisionCode}
-                        </span>
+                      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                        <Chip>{row.decisionCode}</Chip>
                         {row.title}
                       </p>
-                      <p className="mt-1 text-sm text-zinc-600">
-                        {badge.glyph} {badge.label} · {formatDecisionValue(row.value)} ·{" "}
-                        {row.impact} impact · {provenance}
+                      <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                        <Badge status={row.status}>{badge.glyph} {badge.label}</Badge>
+                        <span className="truncate">{formatDecisionValue(row.value)} · {row.impact} impact · {provenance}</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <a
                         href={`/projects/${projectId}/decisions?code=${row.decisionCode}${statusFilter ? `&filter=${activeFilter}` : ""}`}
-                        className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
+                        className={btnSecondary}
                       >
                         View
                       </a>
@@ -226,7 +237,7 @@ export default async function DecisionsPage({
                         <form action={confirmAction.bind(null, projectId, row.decisionKey)}>
                           <button
                             type="submit"
-                            className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white hover:bg-zinc-700"
+                            className={btnPrimary}
                           >
                             Confirm
                           </button>
@@ -242,24 +253,28 @@ export default async function DecisionsPage({
       )}
 
       {detail && (
-        <section aria-label="Decision detail" className="rounded border border-zinc-900 p-4">
-          <h2 className="text-lg font-semibold">{detail.row.title}</h2>
-          <p className="font-mono text-xs text-zinc-500">{detail.row.decisionCode}</p>
+        <section aria-label="Decision detail" className="rounded-lg border border-zinc-900 bg-white p-5 dark:border-zinc-100 dark:bg-zinc-950">
+          <h2 className="text-lg font-semibold tracking-tight">{detail.row.title}</h2>
+          <p className="mt-1 flex flex-wrap items-center gap-2">
+            <Chip>{detail.row.decisionCode}</Chip>
+            <Badge status={detail.row.status}>{decisionStatusLabel(detail.row.status).label}</Badge>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">{detail.row.impact} impact</span>
+          </p>
           <dl className="mt-3 grid gap-2 text-sm">
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Status</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Status</dt>
               <dd>{decisionStatusLabel(detail.row.status).label}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Decision</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Decision</dt>
               <dd>{formatDecisionValue(detail.row.value)}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Impact</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Impact</dt>
               <dd>{detail.row.impact}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Source</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Source</dt>
               <dd>
                 {
                   getProvenanceDisplay(
@@ -273,14 +288,14 @@ export default async function DecisionsPage({
             </div>
             {detail.row.rationale && (
               <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-zinc-500">Why</dt>
+                <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Why</dt>
                 <dd>{detail.row.rationale}</dd>
               </div>
             )}
           </dl>
 
           <h3 className="mt-4 text-sm font-medium">History</h3>
-          <ul className="mt-1 flex flex-col gap-1 text-sm text-zinc-600">
+          <ul className="mt-1 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-400">
             {detail.history.map((entry) => (
               <li key={entry.id}>
                 v{entry.version} · {entry.status} · {formatDecisionValue(entry.value)}
@@ -291,7 +306,7 @@ export default async function DecisionsPage({
 
           <h3 className="mt-4 text-sm font-medium">Change decision</h3>
           {detail.row.impact === "HIGH" && (
-            <p className="mt-1 text-sm text-amber-800">
+            <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
               ! High-impact change: saving runs the dependency cascade and may mark dependent
               decisions not applicable.
             </p>
@@ -306,7 +321,7 @@ export default async function DecisionsPage({
                 name="value"
                 rows={2}
                 defaultValue={JSON.stringify(detail.row.value)}
-                className="rounded border border-zinc-300 px-3 py-2 font-mono text-sm"
+                className="rounded border border-zinc-300 dark:border-zinc-700 px-3 py-2 font-mono text-sm"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
@@ -315,7 +330,7 @@ export default async function DecisionsPage({
                 name="rationale"
                 type="text"
                 defaultValue={detail.row.rationale ?? ""}
-                className="rounded border border-zinc-300 px-3 py-2"
+                className="rounded border border-zinc-300 dark:border-zinc-700 px-3 py-2"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
@@ -323,7 +338,7 @@ export default async function DecisionsPage({
               <select
                 name="status"
                 defaultValue={detail.row.status}
-                className="rounded border border-zinc-300 px-3 py-2"
+                className="rounded border border-zinc-300 dark:border-zinc-700 px-3 py-2"
               >
                 <option value="UNRESOLVED">Needs decision</option>
                 <option value="RECOMMENDED">Recommended</option>
@@ -334,7 +349,7 @@ export default async function DecisionsPage({
             </label>
             <button
               type="submit"
-              className="w-fit rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              className="w-fit rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Save change
             </button>

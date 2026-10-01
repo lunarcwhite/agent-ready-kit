@@ -1,20 +1,22 @@
-// Error state for the project list (TASK-012: error states exist).
+// Project error boundary (TASK-115/116; F-08: covers every project child route
+// without its own error.tsx — discovery and specs/[doc] keep theirs, the rest
+// fall through to this boundary instead of nothing).
 // A route error boundary must be a client component — this is the only
-// client JS on the route, limited to the framework-mandated retry button.
+// client JS on the boundary, limited to the framework-mandated retry button.
 // Approved project state is untouched by render failures; retry re-renders.
 "use client";
 
-export default function ProjectsError({
+export default function ProjectError({
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-4 p-8 text-center">
-      <h1 className="text-2xl font-semibold tracking-tight">Couldn&apos;t load your projects</h1>
+    <main className="mx-auto flex w-full max-w-5xl flex-col justify-center gap-4 px-6 py-8 text-center">
+      <h1 className="text-2xl font-semibold tracking-tight">Couldn&apos;t load this project section</h1>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Your projects are safe. Check your connection and try again.
+        Your approved work is safe. Check your connection and try again.
       </p>
       <button
         type="button"

@@ -9,23 +9,20 @@ import { signOut } from "@/auth";
 import { getSessionUser } from "@/infrastructure/auth/identity";
 import { getDb } from "@/infrastructure/database/db";
 import { listProjects, type ProjectRow } from "@/modules/projects/repository";
+import {
+  Badge,
+  LifecycleSteps,
+  PageHeader,
+  btnPrimary,
+  btnSecondary,
+  cardCls,
+  faintText,
+} from "@/app/components/ui";
+import { EmptyState } from "@/app/components/empty-state";
 
 async function logout(): Promise<void> {
   "use server";
   await signOut({ redirectTo: "/login" });
-}
-
-function statusText(project: ProjectRow): string {
-  switch (project.lifecycleState) {
-    case "DISCOVERY":
-      return "Discovery in progress";
-    case "DRAFT":
-      return "Draft in progress";
-    case "NEEDS_REVIEW":
-      return "Needs review";
-    case "IMPLEMENTATION_READY":
-      return "Implementation Ready ✓";
-  }
 }
 
 function formatUpdated(at: Date): string {
@@ -39,66 +36,82 @@ function formatUpdated(at: Date): string {
   return at.toLocaleDateString();
 }
 
+function readinessNote(project: ProjectRow): string | null {
+  if (project.readinessScore > 0) return `${project.readinessScore}% ready`;
+  return null;
+}
+
 export default async function ProjectsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   const projects = await listProjects(getDb(), user.id);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Your Projects</h1>
-          <p className="mt-1 text-sm text-zinc-600">Signed in as {user.email}.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/projects/new"
-            className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            + New
-          </Link>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </div>
+    <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10">
+        <PageHeader
+          eyebrow={<p className="text-sm text-zinc-500 dark:text-zinc-400">Signed in as {user.email}</p>}
+          title="Your projects"
+          description="Turn each idea into validated, implementation-ready context."
+          actions={
+            <>
+              <Link href="/projects/new" className={btnPrimary}>
+                + New project
+              </Link>
+              <form action={logout}>
+                <button type="submit" className={btnSecondary}>
+                  Sign out
+                </button>
+              </form>
+            </>
+          }
+        />
 
-      {projects.length === 0 ? (
-        <div className="rounded border border-zinc-200 p-8 text-center">
-          <p className="text-lg font-medium">No projects yet</p>
-          <p className="mt-1 text-sm text-zinc-600">
-            Let&apos;s turn your first idea into an Agent Ready project.
-          </p>
-          <Link
-            href="/projects/new"
-            className="mt-4 inline-block rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-          >
-            Create Project
-          </Link>
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {projects.map((project) => (
-            <li key={project.id} className="rounded border border-zinc-200 p-4">
-              <p className="font-medium">{project.name}</p>
-              {project.description && (
-                <p className="mt-1 text-sm text-zinc-600">{project.description}</p>
-              )}
-              <p className="mt-2 text-sm text-zinc-500">
-                {statusText(project)}
-                {project.readinessScore > 0 && ` · Readiness ${project.readinessScore}%`} · Updated{" "}
-                {formatUpdated(project.updatedAt)}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+        {projects.length === 0 ? (
+          <EmptyState
+            title="No projects yet"
+            body="Turn your software idea into an implementation-ready project specification. Discovery, decisions, validation, and export: guided step by step."
+            actionHref="/projects/new"
+            actionLabel="Create your first project"
+          />
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {projects.map((project) => {
+              const readiness = readinessNote(project);
+              return (
+                <li key={project.id}>
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className={`${cardCls} block h-full transition-colors hover:border-zinc-400 dark:hover:border-zinc-600`}
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block truncate text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                          {project.name}
+                        </span>
+                        {project.description && (
+                          <span className={`mt-1 line-clamp-2 block ${faintText}`}>
+                            {project.description}
+                          </span>
+                        )}
+                      </span>
+                      <Badge status={project.lifecycleState} />
+                    </span>
+                    <span className="mt-3 flex items-center justify-between gap-3">
+                      <LifecycleSteps current={project.lifecycleState} />
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {[readiness, `Updated ${formatUpdated(project.updatedAt)}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </main>
+    </div>
   );
 }

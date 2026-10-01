@@ -11,7 +11,6 @@
 // never creates documents: compilers own generation, this page only reads,
 // so an ungenerated document renders an empty state instead of a container.
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { getSessionUser } from "@/infrastructure/auth/identity";
 import { getDb } from "@/infrastructure/database/db";
 import { getProject } from "@/modules/projects/repository";
@@ -29,6 +28,7 @@ import {
 import { listSectionSources, type SectionSourceRef } from "@/modules/specifications/dependencies";
 import { SpecificationNotFoundError } from "@/modules/specifications/errors";
 import { SPEC_DOCS, documentStatusLabel, resolveSpecSlug, sectionStatusLabel } from "./labels";
+import { BackLink, Badge, Chip, PageHeader, btnSecondary } from "@/app/components/ui";
 
 interface DocBlock {
   documentType: string;
@@ -142,22 +142,46 @@ export default async function SpecificationPage({
   const staleCount = allSections.filter((section) => section.status === "STALE").length;
   const proposedCount = allSections.filter((section) => section.status === "PROPOSED").length;
 
+  // Unresolvable ?version= / ?section= falls back to the current approved
+  // content (historical/detail stay null). Surface that fallback instead of
+  // rendering it silently; the content rendered below is unchanged.
+  const unknownVersionParam =
+    query.version !== undefined && query.version !== "" && historical === null;
+  const unknownSectionParam =
+    query.section !== undefined &&
+    query.section !== "" &&
+    detail === null &&
+    historical === null;
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-8">
-      <div>
-        <Link href="/projects" className="text-sm text-zinc-500 hover:underline">
-          ← Projects
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{target.title} specification</h1>
-        <p className="mt-1 text-sm text-zinc-600">{target.description}</p>
-        {blocks.length > 0 && (
-          <p className="mt-1 text-sm text-zinc-600">
-            {allSections.length} sections
-            {staleCount > 0 && ` · ${staleCount} need review`}
-            {proposedCount > 0 && ` · ${proposedCount} proposed`}
-          </p>
-        )}
-      </div>
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
+      <PageHeader
+        eyebrow={<BackLink href="/projects">← Projects</BackLink>}
+        title={`${target.title} specification`}
+        description={target.description}
+        meta={
+          blocks.length > 0 ? (
+            <>
+              <Badge status={staleCount > 0 ? "STALE" : "CURRENT"}>
+                {staleCount > 0 ? `${staleCount} need review` : "Current"}
+              </Badge>
+              {proposedCount > 0 && <Badge status="PROPOSED">{`${proposedCount} proposed`}</Badge>}
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {allSections.length} sections
+              </span>
+            </>
+          ) : undefined
+        }
+      />
+
+      {(unknownVersionParam || unknownSectionParam) && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          Unknown version or section. Showing the current approved content.
+        </p>
+      )}
 
       <nav aria-label="Specification types" className="flex flex-wrap gap-2">
         {SPEC_DOCS.map((item) => (
@@ -165,10 +189,10 @@ export default async function SpecificationPage({
             key={item.slug}
             href={`/projects/${projectId}/specifications/${item.slug}`}
             aria-current={item.slug === target.slug ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm transition-colors ${
               item.slug === target.slug
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 hover:bg-zinc-50"
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
             }`}
           >
             {item.title}
@@ -177,9 +201,9 @@ export default async function SpecificationPage({
       </nav>
 
       {blocks.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">
+        <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
           No {target.title.toLowerCase()} specification has been generated yet. Complete discovery
-          and confirm decisions first — compilers write proposals here for review.
+          and confirm decisions first. Compilers write proposals here for review.
         </p>
       ) : (
         <>
@@ -187,10 +211,10 @@ export default async function SpecificationPage({
             <a
               href={baseHref}
               aria-current={view === "structured" ? "page" : undefined}
-              className={`rounded border px-3 py-1 text-sm ${
+              className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm transition-colors ${
                 view === "structured"
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-300 hover:bg-zinc-50"
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
               }`}
             >
               Structured
@@ -198,10 +222,10 @@ export default async function SpecificationPage({
             <a
               href={`${baseHref}?view=markdown`}
               aria-current={view === "markdown" ? "page" : undefined}
-              className={`rounded border px-3 py-1 text-sm ${
+              className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm transition-colors ${
                 view === "markdown"
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-300 hover:bg-zinc-50"
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
               }`}
             >
               Markdown
@@ -212,54 +236,51 @@ export default async function SpecificationPage({
             <section aria-label="Historical version" className="flex flex-col gap-3">
               <p
                 role="note"
-                className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
               >
-                Historical version {historical.version} — frozen at project state v
+                Historical version {historical.version}: frozen at project state v
                 {historical.projectStateVersion}. This is not the current specification.
               </p>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded border border-zinc-200 bg-zinc-50 p-4 text-sm">
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950">
                 {historical.content}
               </pre>
-              <a href={baseHref} className="text-sm text-zinc-600 hover:underline">
+              <a href={baseHref} className="text-sm text-zinc-600 hover:underline dark:text-zinc-400">
                 ← Back to current
               </a>
             </section>
           ) : detail ? (
             <section
               aria-label="Section detail"
-              className="flex flex-col gap-3 rounded border border-zinc-200 p-4"
+              className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
             >
               {(() => {
                 const badge = sectionStatusLabel(detail.section.status);
                 return (
                   <>
                     <div>
-                      <p className="text-sm font-medium">
-                        <span className="mr-2 font-mono text-xs text-zinc-500">
-                          {detail.section.sectionKey}
-                        </span>
+                      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                        <Chip>{detail.section.sectionKey}</Chip>
                         {detail.section.title}
                       </p>
-                      <p className="mt-1 text-sm text-zinc-600">
-                        {badge.glyph} {badge.label} · in {detail.block.title}
+                      <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                        <Badge status={detail.section.status}>
+                          {badge.glyph} {badge.label}
+                        </Badge>
+                        <span>in {detail.block.title}</span>
                       </p>
                     </div>
                     <p className="whitespace-pre-wrap text-sm">{detail.section.renderedContent}</p>
                     <div>
                       <h3 className="text-sm font-medium">Source references</h3>
                       {detail.sources.length === 0 ? (
-                        <p className="mt-1 text-sm text-zinc-500">
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                           No canonical sources linked to this section.
                         </p>
                       ) : (
                         <ul className="mt-2 flex flex-wrap gap-2">
                           {detail.sources.map((source) => (
-                            <li
-                              key={`${source.sourceType}:${source.sourceId}`}
-                              title={source.sourceType}
-                              className="rounded-full border border-zinc-300 px-3 py-1 font-mono text-xs text-zinc-700"
-                            >
-                              {source.label}
+                            <li key={`${source.sourceType}:${source.sourceId}`}>
+                              <Chip title={source.sourceType}>{source.label}</Chip>
                             </li>
                           ))}
                         </ul>
@@ -267,7 +288,7 @@ export default async function SpecificationPage({
                     </div>
                     <a
                       href={`${baseHref}${view === "markdown" ? "?view=markdown" : ""}`}
-                      className="text-sm text-zinc-600 hover:underline"
+                      className="text-sm text-zinc-600 hover:underline dark:text-zinc-400"
                     >
                       ← Back to sections
                     </a>
@@ -278,9 +299,9 @@ export default async function SpecificationPage({
           ) : view === "markdown" ? (
             <section aria-label="Markdown rendering" className="flex flex-col gap-4">
               {blocks.map((block) => (
-                <div key={block.documentType}>
-                  <h2 className="text-sm font-medium text-zinc-500">{block.title}</h2>
-                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded border border-zinc-200 bg-zinc-50 p-4 text-sm">
+                <div key={block.documentType} className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{block.title}</h2>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                     {assembleMarkdown(block.sections) || "No sections yet."}
                   </pre>
                 </div>
@@ -292,43 +313,50 @@ export default async function SpecificationPage({
                 const docBadge = documentStatusLabel(block.document.status);
                 const latest = block.versions[block.versions.length - 1] ?? null;
                 return (
-                  <section key={block.documentType} aria-label={block.title}>
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <h2 className="text-sm font-medium text-zinc-500">
-                        {block.title} · {docBadge.glyph} {docBadge.label} · v
-                        {block.document.currentVersion}
-                        {latest
-                          ? ` · approved at state v${latest.projectStateVersion}`
-                          : " · not yet approved"}
+                  <section key={block.documentType} aria-label={block.title} className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {block.title}
                       </h2>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge status={block.document.status}>
+                          {docBadge.glyph} {docBadge.label}
+                        </Badge>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          v{block.document.currentVersion}
+                          {latest
+                            ? ` · approved at state v${latest.projectStateVersion}`
+                            : " · not yet approved"}
+                        </span>
+                      </span>
                     </div>
                     {block.sections.length === 0 ? (
-                      <p className="mt-2 rounded border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">
+                      <p className="mt-3 rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
                         No sections in this document yet.
                       </p>
                     ) : (
-                      <ul className="mt-2 flex flex-col gap-2">
+                      <ul className="mt-3 flex flex-col gap-2">
                         {block.sections.map((section) => {
                           const badge = sectionStatusLabel(section.status);
                           return (
                             <li
                               key={section.sectionKey}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 p-3"
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white p-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700"
                             >
                               <div className="min-w-0">
-                                <p className="text-sm font-medium">
-                                  <span className="mr-2 font-mono text-xs text-zinc-500">
-                                    {section.sectionKey}
-                                  </span>
+                                <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                                  <Chip>{section.sectionKey}</Chip>
                                   {section.title}
                                 </p>
-                                <p className="mt-1 text-sm text-zinc-600">
-                                  {badge.glyph} {badge.label}
+                                <p className="mt-1.5">
+                                  <Badge status={section.status}>
+                                    {badge.glyph} {badge.label}
+                                  </Badge>
                                 </p>
                               </div>
                               <a
                                 href={`${baseHref}?section=${section.sectionKey}`}
-                                className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
+                                className={btnSecondary}
                               >
                                 View
                               </a>
@@ -338,14 +366,14 @@ export default async function SpecificationPage({
                       </ul>
                     )}
                     {block.versions.length > 0 && (
-                      <div className="mt-3">
-                        <h3 className="text-sm font-medium">History</h3>
-                        <ul className="mt-1 flex flex-wrap gap-2">
+                      <div className="mt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">History</h3>
+                        <ul className="mt-2 flex flex-wrap gap-2">
                           {block.versions.map((version) => (
                             <li key={version.version}>
                               <a
                                 href={`${baseHref}?version=${version.version}`}
-                                className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
+                                className="inline-flex min-h-[44px] items-center rounded-full border border-zinc-300 px-4 py-2 text-sm transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
                               >
                                 v{version.version} · state v{version.projectStateVersion}
                               </a>

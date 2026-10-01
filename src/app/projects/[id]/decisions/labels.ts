@@ -8,7 +8,7 @@ export const DECISION_STATUS_LABEL: Record<string, { label: string; glyph: strin
   RECOMMENDED: { label: "Recommended", glyph: "◇" },
   CONFIRMED: { label: "Confirmed", glyph: "✓" },
   DEFERRED: { label: "Deferred", glyph: "○" },
-  NOT_APPLICABLE: { label: "Not applicable", glyph: "—" },
+  NOT_APPLICABLE: { label: "Not applicable", glyph: "–" },
 };
 
 export const DECISION_STATUS_FILTERS = [
@@ -40,11 +40,11 @@ export function filterToStatus(filter: string | undefined): string | undefined {
 }
 
 export function formatDecisionValue(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value === "" ? "—" : value;
+  if (value === null || value === undefined) return "–";
+  if (typeof value === "string") return value === "" ? "–" : value;
   try {
-    return JSON.stringify(value) ?? "—";
+    return JSON.stringify(value) ?? "–";
   } catch {
-    return "—";
+    return "–";
   }
 }

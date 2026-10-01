@@ -15,15 +15,15 @@ export function OperationPending({ label, hint }: { label: string; hint?: string
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className="flex items-center gap-3 rounded border border-zinc-200 bg-zinc-50 px-4 py-3"
+      className="flex items-center gap-3 rounded border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900"
     >
       <span
         aria-hidden="true"
-        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900"
+        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100"
       />
       <div>
-        <p className="text-sm font-medium text-zinc-900">{label}</p>
-        {hint ? <p className="mt-0.5 text-sm text-zinc-600">{hint}</p> : null}
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{label}</p>
+        {hint ? <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">{hint}</p> : null}
       </div>
     </div>
   );
@@ -43,14 +43,14 @@ export function OperationFailure({
   retryLabel?: string;
 }) {
   return (
-    <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3">
-      <p className="text-sm font-medium text-red-800">{title}</p>
-      <p className="mt-1 text-sm text-red-700">{detail}</p>
-      <p className="mt-1 text-sm text-red-700">{stateNote}</p>
+    <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950">
+      <p className="text-sm font-medium text-red-800 dark:text-red-200">{title}</p>
+      <p className="mt-1 text-sm text-red-700 dark:text-red-300">{detail}</p>
+      <p className="mt-1 text-sm text-red-700 dark:text-red-300">{stateNote}</p>
       {retryHref ? (
         <a
           href={retryHref}
-          className="mt-2 inline-block rounded border border-red-300 px-3 py-1 text-sm font-medium text-red-800 hover:bg-red-100"
+          className="mt-2 inline-flex min-h-[44px] items-center rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900"
         >
           {retryLabel}
         </a>

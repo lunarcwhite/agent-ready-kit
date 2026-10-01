@@ -11,7 +11,7 @@
 // renders inline via ?code= rather than a separate route (design.md §92:
 // SCREEN-* are concepts, not mandatory URLs).
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
+import { BackLink, Badge, Chip, PageHeader, btnSecondary } from "@/app/components/ui";
 import { getSessionUser } from "@/infrastructure/auth/identity";
 import { getDb } from "@/infrastructure/database/db";
 import { getProject } from "@/modules/projects/repository";
@@ -123,6 +123,10 @@ export default async function TasksPage({
       if (!(error instanceof UserTaskNotFoundError)) throw error;
     }
   }
+  // An unresolvable ?code= is silently ignored (list renders unchanged).
+  // Surface that fallback; the list rendering below is unchanged.
+  const unknownTaskParam =
+    query.code !== undefined && query.code !== "" && detail === null;
 
   const base = `/projects/${projectId}/tasks`;
   const withQuery = (viewParam: View, filter: string) =>
@@ -137,22 +141,25 @@ export default async function TasksPage({
     return (
       <li
         key={task.taskCode}
-        className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 p-3"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-3.5 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700"
       >
         <div className="min-w-0">
-          <p className="text-sm font-medium">
-            <span className="mr-2 font-mono text-xs text-zinc-500">{task.taskCode}</span>
-            {task.title}
+          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            <Chip>{task.taskCode}</Chip>
+            <span>{task.title}</span>
+            <Badge status={task.status}>
+              {badge.glyph} {badge.label}
+            </Badge>
           </p>
-          <p className="mt-1 text-sm text-zinc-600">
-            {badge.glyph} {badge.label} · {task.priority}
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            {task.priority}
             {milestone ? ` · ${milestone}` : ""}
           </p>
-          {reason && <p className="mt-1 text-sm text-amber-800">{reason}</p>}
+          {reason && <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">! {reason}</p>}
         </div>
         <a
           href={detailHref(task.taskCode)}
-          className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
+          className={btnSecondary}
         >
           View
         </a>
@@ -161,16 +168,26 @@ export default async function TasksPage({
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 p-8">
-      <div>
-        <Link href="/projects" className="text-sm text-zinc-500 hover:underline">
-          ← Projects
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Implementation plan</h1>
-        <p className="mt-1 text-sm text-zinc-600">
-          {tasks.length} tasks · {milestones.length} milestones
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
+      <PageHeader
+        eyebrow={<BackLink href="/projects">← Projects</BackLink>}
+        title="Implementation plan"
+        description={`${tasks.length} tasks · ${milestones.length} milestones`}
+        meta={
+          <Badge status="INFO">
+            {view === "milestones" ? "Milestones" : "All tasks"} · {activeFilter}
+          </Badge>
+        }
+      />
+
+      {unknownTaskParam && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          Task not found. It may have been removed; pick another task below.
         </p>
-      </div>
+      )}
 
       <nav aria-label="Plan view" className="flex flex-wrap gap-2">
         {(["milestones", "all"] as const).map((option) => (
@@ -178,10 +195,10 @@ export default async function TasksPage({
             key={option}
             href={withQuery(option, activeFilter)}
             aria-current={view === option ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm ${
               view === option
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 hover:bg-zinc-50"
+                ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
             }`}
           >
             {option === "milestones" ? "Milestones" : "All tasks"}
@@ -195,10 +212,10 @@ export default async function TasksPage({
             key={filter}
             href={withQuery(view, filter)}
             aria-current={activeFilter === filter ? "page" : undefined}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm ${
               activeFilter === filter
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 hover:bg-zinc-50"
+                ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
             }`}
           >
             {filter}
@@ -207,7 +224,7 @@ export default async function TasksPage({
       </nav>
 
       {visible.length === 0 ? (
-        <p className="rounded border border-dashed border-zinc-300 p-4 text-sm text-zinc-500">
+        <p className="rounded border border-dashed border-zinc-300 dark:border-zinc-700 p-4 text-sm text-zinc-500 dark:text-zinc-400">
           No tasks match. Generate an implementation plan and it appears here.
         </p>
       ) : view === "all" ? (
@@ -215,11 +232,11 @@ export default async function TasksPage({
       ) : (
         [...grouped.values()].map(({ milestone, rows }) => (
           <section key={milestone.id} aria-label={milestone.title}>
-            <h2 className="text-sm font-medium text-zinc-500">
+            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
               {milestone.milestoneCode} · {milestone.title} · {milestone.status}
             </h2>
             {rows.length === 0 ? (
-              <p className="mt-2 text-sm text-zinc-400">No tasks in this milestone.</p>
+              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">No tasks in this milestone.</p>
             ) : (
               <ul className="mt-2 flex flex-col gap-2">{rows.map(renderRow)}</ul>
             )}
@@ -228,43 +245,43 @@ export default async function TasksPage({
       )}
       {view === "milestones" && unassigned.length > 0 && (
         <section aria-label="Unassigned tasks">
-          <h2 className="text-sm font-medium text-zinc-500">Unassigned</h2>
+          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Unassigned</h2>
           <ul className="mt-2 flex flex-col gap-2">{unassigned.map(renderRow)}</ul>
         </section>
       )}
 
       {detail && (
-        <section aria-label="Task detail" className="rounded border border-zinc-900 p-4">
+        <section aria-label="Task detail" className="rounded-lg border border-zinc-900 bg-white p-5 dark:border-zinc-100 dark:bg-zinc-950">
           <h2 className="text-lg font-semibold">{detail.row.title}</h2>
-          <p className="font-mono text-xs text-zinc-500">{detail.row.taskCode}</p>
+          <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{detail.row.taskCode}</p>
           <dl className="mt-3 grid gap-2 text-sm">
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Status</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Status</dt>
               <dd>
                 {taskStatusLabel(detail.row.status).glyph}{" "}
                 {taskStatusLabel(detail.row.status).label}
               </dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Priority</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Priority</dt>
               <dd>{detail.row.priority}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Milestone</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Milestone</dt>
               <dd>{detail.milestone ? detail.milestone.title : "Unassigned"}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Objective</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Objective</dt>
               <dd>{detail.row.objective}</dd>
             </div>
             {detail.row.implementationNotes && (
               <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-zinc-500">Notes</dt>
+                <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Notes</dt>
                 <dd>{detail.row.implementationNotes}</dd>
               </div>
             )}
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-zinc-500">Depends on</dt>
+              <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Depends on</dt>
               <dd>
                 {detail.prerequisites.length === 0
                   ? "No dependencies."
@@ -273,7 +290,7 @@ export default async function TasksPage({
             </div>
             {detail.dependents.length > 0 && (
               <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-zinc-500">Required by</dt>
+                <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Required by</dt>
                 <dd>{detail.dependents.join(", ")}</dd>
               </div>
             )}
@@ -286,7 +303,7 @@ export default async function TasksPage({
               (line) =>
                 line && (
                   <div key={line} className="flex gap-2">
-                    <dt className="w-24 shrink-0 text-zinc-500">References</dt>
+                    <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">References</dt>
                     <dd>{line}</dd>
                   </div>
                 ),
@@ -294,13 +311,13 @@ export default async function TasksPage({
           </dl>
 
           <h3 className="mt-4 text-sm font-medium">Acceptance criteria</h3>
-          <ul className="mt-1 list-disc pl-5 text-sm text-zinc-700">
+          <ul className="mt-1 list-disc pl-5 text-sm text-zinc-700 dark:text-zinc-300">
             {detail.row.acceptanceCriteria.map((criterion) => (
               <li key={criterion}>{criterion}</li>
             ))}
           </ul>
           <h3 className="mt-4 text-sm font-medium">Definition of done</h3>
-          <ul className="mt-1 list-disc pl-5 text-sm text-zinc-700">
+          <ul className="mt-1 list-disc pl-5 text-sm text-zinc-700 dark:text-zinc-300">
             {detail.row.definitionOfDone.map((item) => (
               <li key={item}>{item}</li>
             ))}

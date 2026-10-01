@@ -6,7 +6,7 @@ describe("discovery workspace labels", () => {
     expect(nodeStatusLabel("UNKNOWN")).toEqual({ label: "Not started", glyph: "○" });
     expect(nodeStatusLabel("PARTIAL")).toEqual({ label: "In progress", glyph: "●" });
     expect(nodeStatusLabel("RESOLVED")).toEqual({ label: "Complete", glyph: "✓" });
-    expect(nodeStatusLabel("NOT_APPLICABLE")).toEqual({ label: "Not applicable", glyph: "—" });
+    expect(nodeStatusLabel("NOT_APPLICABLE")).toEqual({ label: "Not applicable", glyph: "–" });
   });
 
   it("labels every discovery level", () => {

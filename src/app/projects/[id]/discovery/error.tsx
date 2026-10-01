@@ -18,7 +18,7 @@ export default function DiscoveryError({
       <button
         type="button"
         onClick={reset}
-        className="mx-auto rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+        className="mx-auto inline-flex min-h-[44px] items-center rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
       >
         Try again
       </button>

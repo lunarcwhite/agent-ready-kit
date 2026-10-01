@@ -7,7 +7,7 @@ export const NODE_STATUS_LABEL: Record<string, { label: string; glyph: string }>
   UNKNOWN: { label: "Not started", glyph: "○" },
   PARTIAL: { label: "In progress", glyph: "●" },
   RESOLVED: { label: "Complete", glyph: "✓" },
-  NOT_APPLICABLE: { label: "Not applicable", glyph: "—" },
+  NOT_APPLICABLE: { label: "Not applicable", glyph: "–" },
 };
 
 export const DISCOVERY_LEVEL_LABEL: Record<string, string> = {
